@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SignInScreen from '../features/auth/screens/SignInScreen';
 import SignUpScreen from '../features/auth/screens/SignUpScreen';
 import HomeScreen from '../features/home/screens/HomeScreen';
+import SelectContactScreen from '../features/chat/screens/SelectContactScreen';
 import { RootStackParamList } from '../types/navigation';
 import { useAuthStore } from '../features/auth/stores/authStore';
 
@@ -22,7 +23,10 @@ export default function AppNavigator() {
       >
         {user ? (
           // Authenticated stack
-          <Stack.Screen name="Home" component={HomeScreen} />
+          <>
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="SelectContact" component={SelectContactScreen} />
+          </>
         ) : (
           // Auth stack
           <>

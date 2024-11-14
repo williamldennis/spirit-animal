@@ -1,21 +1,78 @@
-import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import * as Contacts from 'expo-contacts';
 import { logger } from '../../../utils/logger';
 
-// Mock data - replace with real contacts later
-const MOCK_CONTACTS = [
-  { id: '1', name: 'John Doe', email: 'john@example.com' },
-  { id: '2', name: 'Jane Smith', email: 'jane@example.com' },
-  { id: '3', name: 'Bob Johnson', email: 'bob@example.com' },
-];
+type Contact = {
+  id: string;
+  name: string;
+  email?: string;
+  phoneNumber?: string;
+};
 
 export default function SelectContactScreen() {
   const navigation = useNavigation();
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleSelectContact = (contact: typeof MOCK_CONTACTS[0]) => {
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  const loadContacts = async () => {
+    try {
+      logger.info('SelectContactScreen', 'Requesting contacts permission');
+      const { status } = await Contacts.requestPermissionsAsync();
+      
+      if (status === 'granted') {
+        logger.info('SelectContactScreen', 'Loading contacts');
+        const { data } = await Contacts.getContactsAsync({
+          fields: [
+            Contacts.Fields.Emails,
+            Contacts.Fields.PhoneNumbers,
+            Contacts.Fields.Name,
+          ],
+        });
+
+        if (data.length > 0) {
+          const formattedContacts: Contact[] = data
+            .filter(contact => contact.name) // Only include contacts with names
+            .map(contact => ({
+              id: contact.id,
+              name: contact.name || 'No Name',
+              email: contact.emails?.[0]?.email,
+              phoneNumber: contact.phoneNumbers?.[0]?.number,
+            }));
+
+          logger.info('SelectContactScreen', 'Contacts loaded', { count: formattedContacts.length });
+          setContacts(formattedContacts);
+        } else {
+          logger.warn('SelectContactScreen', 'No contacts found');
+        }
+      } else {
+        logger.warn('SelectContactScreen', 'Contacts permission denied');
+        Alert.alert(
+          'Permission Required',
+          'Please enable contacts permission to chat with your contacts.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      logger.error('SelectContactScreen', 'Error loading contacts', { error });
+      Alert.alert(
+        'Error',
+        'Could not load contacts. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectContact = (contact: Contact) => {
     logger.info('SelectContactScreen', 'Contact selected', { contactId: contact.id });
     // TODO: Create chat with contact
     navigation.goBack();
@@ -41,26 +98,38 @@ export default function SelectContactScreen() {
       </View>
 
       {/* Contacts List */}
-      <FlatList
-        data={MOCK_CONTACTS}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity 
-            style={styles.contactItem}
-            onPress={() => handleSelectContact(item)}
-          >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {item.name.charAt(0)}
-              </Text>
-            </View>
-            <View style={styles.contactInfo}>
-              <Text style={styles.contactName}>{item.name}</Text>
-              <Text style={styles.contactEmail}>{item.email}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-      />
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <Text>Loading contacts...</Text>
+        </View>
+      ) : contacts.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <Text>No contacts found</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={contacts}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity 
+              style={styles.contactItem}
+              onPress={() => handleSelectContact(item)}
+            >
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {item.name.charAt(0)}
+                </Text>
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactName}>{item.name}</Text>
+                {item.email && (
+                  <Text style={styles.contactEmail}>{item.email}</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -133,5 +202,10 @@ const styles = StyleSheet.create({
   contactEmail: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 }); 

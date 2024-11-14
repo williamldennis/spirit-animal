@@ -16,14 +16,18 @@ export default {
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.willdennis.spiritanimal'
+      bundleIdentifier: 'com.willdennis.spiritanimal',
+      infoPlist: {
+        NSContactsUsageDescription: 'Allow Spirit Animal to access your contacts so you can chat with them.'
+      }
     },
     android: {
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#ffffff'
       },
-      package: 'com.willdennis.spiritanimal'
+      package: 'com.willdennis.spiritanimal',
+      permissions: ['android.permission.READ_CONTACTS']
     },
     web: {
       favicon: './assets/favicon.png'
@@ -36,5 +40,13 @@ export default {
       firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       firebaseAppId: process.env.FIREBASE_APP_ID,
     },
+    plugins: [
+      [
+        'expo-contacts',
+        {
+          contactsPermission: 'Allow Spirit Animal to access your contacts.'
+        }
+      ]
+    ],
   }
 }; 
