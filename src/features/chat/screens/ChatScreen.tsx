@@ -8,7 +8,8 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -17,55 +18,64 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../types/navigation';
 import { logger } from '../../../utils/logger';
 import { useAuthStore } from '../../auth/stores/authStore';
+import { Message, chatService } from '../services/chatService';
+import { Chat } from '../services/chatService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
-type Message = {
-  id: string;
-  text: string;
-  senderId: string;
-  createdAt: Date;
-};
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [chat, setChat] = useState<Chat | null>(null);
   const navigation = useNavigation();
   const route = useRoute<Props['route']>();
   const { chatId } = route.params;
   const user = useAuthStore(state => state.user);
 
-  // Load chat messages
+  // Load chat details
   useEffect(() => {
-    const loadMessages = async () => {
-      logger.info('ChatScreen', 'Loading messages', { chatId });
+    const loadChat = async () => {
       try {
-        // TODO: Implement message loading from Firebase
-        setLoading(false);
+        const chatDetails = await chatService.getChatDetails(chatId);
+        setChat(chatDetails);
       } catch (error) {
-        logger.error('ChatScreen', 'Error loading messages', { error });
-        setLoading(false);
+        logger.error('ChatScreen', 'Error loading chat details', { error });
       }
     };
+    loadChat();
+  }, [chatId]);
 
-    loadMessages();
+  // Subscribe to messages
+  useEffect(() => {
+    logger.info('ChatScreen', 'Setting up messages subscription');
+    const unsubscribe = chatService.subscribeToMessages(chatId, (newMessages) => {
+      setMessages(newMessages);
+      setLoading(false);
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      logger.info('ChatScreen', 'Cleaning up messages subscription');
+      unsubscribe();
+    };
   }, [chatId]);
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !user) {
-      logger.debug('ChatScreen', 'Invalid message or user state', { 
-        messageLength: newMessage.length,
-        hasUser: !!user 
-      });
+    if (!newMessage.trim() || !user || sending) {
       return;
     }
 
-    logger.info('ChatScreen', 'Sending message', { chatId });
+    setSending(true);
     try {
-      // TODO: Implement message sending to Firebase
+      await chatService.sendMessage(chatId, user.uid, newMessage.trim());
       setNewMessage('');
     } catch (error) {
       logger.error('ChatScreen', 'Error sending message', { error });
+      Alert.alert('Error', 'Failed to send message. Please try again.');
+    } finally {
+      setSending(false);
     }
   };
 
