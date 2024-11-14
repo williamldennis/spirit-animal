@@ -1,0 +1,117 @@
+graph TB
+    subgraph Mobile_Client["React Native Client"]
+        direction TB
+        UI["UI Layer (React Native)"]
+        subgraph Navigation["Navigation Layer"]
+            RNNav["React Navigation"]
+            Screens["Screen Stacks"]
+        end
+        
+        subgraph State["State Management"]
+            Zustand["Zustand Store"]
+            RQ["React Query"]
+            LocalCache["MMKV Storage"]
+        end
+        
+        subgraph Core_Features["Feature Modules"]
+            Auth["Auth Feature"]
+            Chat["Chat Feature"]
+            Calendar["Calendar Feature"]
+            Tasks["Tasks Feature"]
+            AI["AI Assistant"]
+        end
+        
+        subgraph Services["Service Layer"]
+            APIClient["API Client"]
+            WebSocket["WebSocket Client"]
+            PushNotif["Push Notifications"]
+            Sync["Sync Service"]
+        end
+        
+        subgraph Utils["Utility Layer"]
+            Error["Error Handling"]
+            Logger["Logging"]
+            Analytics["Analytics"]
+            Encrypt["Encryption"]
+        end
+    end
+
+    subgraph Backend["Backend Services"]
+        direction TB
+        subgraph Firebase["Firebase"]
+            FAuth["Authentication"]
+            FStore["Firestore"]
+            FCM["Cloud Messaging"]
+            FFunctions["Cloud Functions"]
+        end
+        
+        subgraph External["External APIs"]
+            OpenAI["OpenAI GPT"]
+            GCal["Google Calendar"]
+            GAuth["Google Auth"]
+        end
+        
+        subgraph Cache["Caching Layer"]
+            Redis["Redis Cache"]
+            FSCache["Firestore Cache"]
+        end
+    end
+
+    subgraph Storage["Data Persistence"]
+        MMKV["MMKV Storage"]
+        AsyncStore["Async Storage"]
+        SecureStore["Secure Storage"]
+    end
+
+    subgraph DevOps["Development & Ops"]
+        CI["GitHub Actions"]
+        Monitoring["Firebase Analytics"]
+        Crash["Crashlytics"]
+        Deploy["Fastlane"]
+    end
+
+    %% Core Flow Connections
+    UI --> Navigation
+    Navigation --> Core_Features
+    Core_Features --> State
+    Core_Features --> Services
+    Services --> Backend
+
+    %% State Management Connections
+    Zustand --> Services
+    RQ --> Services
+    LocalCache --> Storage
+
+    %% Service Layer Connections
+    APIClient --> Firebase
+    APIClient --> External
+    WebSocket --> FStore
+    PushNotif --> FCM
+    Sync --> Storage
+
+    %% Backend Connections
+    FAuth --> GAuth
+    FFunctions --> OpenAI
+    FFunctions --> GCal
+    FStore --> FSCache
+    
+    %% Storage Connections
+    Services --> MMKV
+    Services --> AsyncStore
+    Services --> SecureStore
+
+    %% Monitoring Connections
+    Utils --> Monitoring
+    Utils --> Crash
+
+    classDef client fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    classDef firebase fill:#ffdf7d,stroke:#333,stroke-width:2px;
+    classDef external fill:#4285F4,stroke:#333,stroke-width:2px,color:#fff;
+    classDef storage fill:#FF6B6B,stroke:#333,stroke-width:2px,color:#fff;
+    classDef devops fill:#90EE90,stroke:#333,stroke-width:2px;
+
+    class Mobile_Client client;
+    class Firebase firebase;
+    class External external;
+    class Storage storage;
+    class DevOps devops;
