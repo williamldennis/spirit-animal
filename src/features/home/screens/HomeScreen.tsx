@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { logger } from '../../../utils/logger';
 import ChatList from '../../chat/components/ChatList';
+import CalendarScreen from '../../calendar/screens/CalendarScreen';
 
 type TabType = {
   id: string;
@@ -59,11 +60,7 @@ export default function HomeScreen() {
       case 'chat':
         return <ChatList />;
       case 'calendar':
-        return (
-          <View style={styles.centerContainer}>
-            <Text>Calendar Coming Soon</Text>
-          </View>
-        );
+        return <CalendarScreen />;
       case 'tasks':
         return (
           <View style={styles.centerContainer}>

@@ -39,6 +39,9 @@ export default {
       firebaseStorageBucket: process.env.FIREBASE_STORAGE_BUCKET,
       firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       firebaseAppId: process.env.FIREBASE_APP_ID,
+      googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID,
+      googleIosClientId: process.env.GOOGLE_IOS_CLIENT_ID,
+      googleExpoClientId: process.env.GOOGLE_EXPO_CLIENT_ID,
     },
     plugins: [
       [
@@ -48,5 +51,6 @@ export default {
         }
       ]
     ],
+    scheme: 'com.willdennis.spiritanimal',
   }
 }; 
