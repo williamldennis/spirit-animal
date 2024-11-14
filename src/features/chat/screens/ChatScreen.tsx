@@ -20,6 +20,7 @@ import { logger } from '../../../utils/logger';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { Message, chatService } from '../services/chatService';
 import { Chat } from '../services/chatService';
+import { userService, UserProfile } from '../../auth/services/userService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -29,23 +30,40 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [chat, setChat] = useState<Chat | null>(null);
+  const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
   const navigation = useNavigation();
   const route = useRoute<Props['route']>();
   const { chatId } = route.params;
   const user = useAuthStore(state => state.user);
 
-  // Load chat details
+  // Load chat details and other user's profile
   useEffect(() => {
-    const loadChat = async () => {
+    const loadChatDetails = async () => {
       try {
         const chatDetails = await chatService.getChatDetails(chatId);
         setChat(chatDetails);
+
+        // Find the other user's ID
+        if (user) {
+          const otherUserId = chatDetails.participants.find(id => id !== user.uid);
+          if (otherUserId) {
+            const profile = await userService.getUserProfile(otherUserId);
+            if (profile) {
+              logger.info('ChatScreen', 'Loaded other user profile', { 
+                userId: otherUserId,
+                name: profile.name 
+              });
+              setOtherUser(profile);
+            }
+          }
+        }
       } catch (error) {
         logger.error('ChatScreen', 'Error loading chat details', { error });
       }
     };
-    loadChat();
-  }, [chatId]);
+
+    loadChatDetails();
+  }, [chatId, user]);
 
   // Subscribe to messages
   useEffect(() => {
@@ -90,8 +108,23 @@ export default function ChatScreen() {
           <Feather name="arrow-left" size={24} color="#111827" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>Chat</Text>
-          {/* TODO: Show other user's name */}
+          <View style={styles.headerTitleContainer}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {otherUser?.name.charAt(0).toUpperCase() || '?'}
+              </Text>
+            </View>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>
+                {otherUser?.name || 'Unknown User'}
+              </Text>
+              {otherUser?.email && (
+                <Text style={styles.headerSubtitle}>
+                  {otherUser.email}
+                </Text>
+              )}
+            </View>
+          </View>
         </View>
         <TouchableOpacity style={styles.headerButton}>
           <Feather name="more-vertical" size={24} color="#6B7280" />
@@ -175,9 +208,29 @@ const styles = StyleSheet.create({
   headerInfo: {
     flex: 1,
   },
-  headerTitle: {
-    fontSize: 18,
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTextContainer: {
+    marginLeft: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EBF5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
     fontWeight: '600',
+    color: '#2563EB',
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '500',
     color: '#111827',
   },
   headerButton: {
@@ -235,5 +288,9 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     padding: 8,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
   },
 }); 

@@ -20,12 +20,49 @@ export type Chat = {
   createdAt: Date;
 };
 
+const convertTimestamp = (timestamp: any): Date => {
+  if (!timestamp) return new Date();
+  if (timestamp.toDate) return timestamp.toDate();
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp === 'string') return new Date(timestamp);
+  return new Date();
+};
+
 class ChatService {
   async createChat(currentUserId: string, contactEmail: string) {
     try {
       logger.info('ChatService.createChat', 'Looking up contact', { contactEmail });
       
-      // First, check if chat already exists
+      // First, find the contact's user ID
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', contactEmail));
+      
+      logger.debug('ChatService.createChat', 'Querying users collection', { 
+        collection: 'users',
+        field: 'email',
+        value: contactEmail 
+      });
+      
+      const querySnapshot = await getDocs(q);
+      
+      logger.debug('ChatService.createChat', 'Query results', { 
+        empty: querySnapshot.empty,
+        size: querySnapshot.size,
+        docs: querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          email: doc.data().email
+        }))
+      });
+      
+      if (querySnapshot.empty) {
+        logger.warn('ChatService.createChat', 'Contact not found', { contactEmail });
+        throw new Error('This contact is not registered on Spirit Animal yet.');
+      }
+
+      const contactUser = querySnapshot.docs[0];
+      const contactId = contactUser.id;
+
+      // Check if chat already exists between these users
       const chatsRef = collection(db, 'chats');
       const existingChatQuery = query(
         chatsRef,
@@ -35,35 +72,36 @@ class ChatService {
       const existingChats = await getDocs(existingChatQuery);
       const existingChat = existingChats.docs.find(doc => {
         const data = doc.data();
-        return data.participants.includes(currentUserId);
+        return data.participants.includes(contactId);
       });
 
       if (existingChat) {
-        logger.info('ChatService.createChat', 'Chat already exists', { chatId: existingChat.id });
+        logger.info('ChatService.createChat', 'Chat already exists', { 
+          chatId: existingChat.id,
+          participants: [currentUserId, contactId]
+        });
         return existingChat.id;
       }
 
-      // If no chat exists, create a new one
+      // Create new chat with both participants
+      const now = new Date();
       const chatDoc = await addDoc(chatsRef, {
-        participants: [currentUserId],
-        createdAt: new Date().toISOString(),
+        participants: [currentUserId, contactId], // Include both users
+        createdAt: Timestamp.fromDate(now),
         lastMessage: null,
         lastMessageAt: null,
-        updatedAt: new Date().toISOString()
+        updatedAt: Timestamp.fromDate(now)
       });
 
       logger.info('ChatService.createChat', 'Chat created', { 
         chatId: chatDoc.id,
-        participants: [currentUserId]
+        participants: [currentUserId, contactId]
       });
 
       return chatDoc.id;
     } catch (error: any) {
       logger.error('ChatService.createChat', 'Failed to create chat', { error });
-      if (error.code === 'permission-denied') {
-        throw new Error('Unable to create chat. Please check your permissions.');
-      }
-      throw new Error('Failed to create chat. Please try again.');
+      throw error;
     }
   }
 
@@ -100,11 +138,15 @@ class ChatService {
     const q = query(messagesRef, orderBy('createdAt', 'desc'));
 
     return onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-      })) as Message[];
+      const messages = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          text: data.text || '',
+          senderId: data.senderId || '',
+          createdAt: convertTimestamp(data.createdAt),
+        };
+      }) as Message[];
 
       logger.debug('ChatService.subscribeToMessages', 'Received messages update', { 
         chatId, 
@@ -138,6 +180,39 @@ class ChatService {
       logger.error('ChatService.getChatDetails', 'Failed to fetch chat details', { error });
       throw new Error('Failed to load chat details. Please try again.');
     }
+  }
+
+  subscribeToChats(userId: string, callback: (chats: Chat[]) => void) {
+    logger.info('ChatService.subscribeToChats', 'Setting up chats subscription', { userId });
+    
+    const chatsRef = collection(db, 'chats');
+    const q = query(
+      chatsRef,
+      where('participants', 'array-contains', userId),
+      orderBy('lastMessageAt', 'desc')
+    );
+
+    return onSnapshot(q, (snapshot) => {
+      const chats = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          participants: data.participants || [],
+          lastMessage: data.lastMessage || null,
+          lastMessageAt: data.lastMessageAt ? convertTimestamp(data.lastMessageAt) : null,
+          createdAt: convertTimestamp(data.createdAt),
+        };
+      }) as Chat[];
+
+      logger.debug('ChatService.subscribeToChats', 'Received chats update', { 
+        userId, 
+        chatCount: chats.length 
+      });
+      
+      callback(chats);
+    }, (error) => {
+      logger.error('ChatService.subscribeToChats', 'Subscription error', { error });
+    });
   }
 }
 

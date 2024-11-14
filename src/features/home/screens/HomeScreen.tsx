@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { logger } from '../../../utils/logger';
+import ChatList from '../../chat/components/ChatList';
 
 type TabType = {
   id: string;
@@ -53,6 +54,27 @@ export default function HomeScreen() {
     );
   };
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'chat':
+        return <ChatList />;
+      case 'calendar':
+        return (
+          <View style={styles.centerContainer}>
+            <Text>Calendar Coming Soon</Text>
+          </View>
+        );
+      case 'tasks':
+        return (
+          <View style={styles.centerContainer}>
+            <Text>Tasks Coming Soon</Text>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Top Navigation */}
@@ -66,7 +88,7 @@ export default function HomeScreen() {
 
       {/* Main Content */}
       <View style={styles.content}>
-        {/* Content will vary based on activeTab */}
+        {renderContent()}
       </View>
 
       {/* Bottom Navigation */}
@@ -167,5 +189,10 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 }); 

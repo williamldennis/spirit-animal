@@ -5,6 +5,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../../../config/firebase';
 import { logger } from '../../../utils/logger';
+import { userService } from './userService';
 
 class AuthService {
   async signUp(email: string, password: string) {
@@ -15,7 +16,14 @@ class AuthService {
         email,
         password
       );
-      logger.info('AuthService.signUp', 'Sign up successful', { userId: userCredential.user.uid });
+
+      // Create user profile in Firestore
+      await userService.createUserProfile(userCredential.user.uid, email);
+      
+      logger.info('AuthService.signUp', 'Sign up successful', { 
+        userId: userCredential.user.uid,
+        email 
+      });
       return userCredential.user;
     } catch (error: any) {
       logger.error('AuthService.signUp', 'Sign up failed', { error });
@@ -31,6 +39,10 @@ class AuthService {
         email,
         password
       );
+
+      // Verify user profile exists
+      await userService.verifyUserProfile(userCredential.user.uid, email);
+      
       logger.info('AuthService.signIn', 'Sign in successful', { userId: userCredential.user.uid });
       return userCredential.user;
     } catch (error: any) {
