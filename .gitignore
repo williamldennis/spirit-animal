@@ -35,3 +35,7 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+
+# Add these lines to .gitignore
+.env
+GoogleService-Info.plist

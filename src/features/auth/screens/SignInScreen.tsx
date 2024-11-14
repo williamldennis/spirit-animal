@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../../types/navigation';
 
-export default function SignInScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, 'SignIn'>;
+
+export default function SignInScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -51,7 +55,10 @@ export default function SignInScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.signUpButton}>
+        <TouchableOpacity 
+          style={styles.signUpButton}
+          onPress={() => navigation.navigate('SignUp')}
+        >
           <Text style={styles.signUpButtonText}>Need an account? Sign up</Text>
         </TouchableOpacity>
       </View>
