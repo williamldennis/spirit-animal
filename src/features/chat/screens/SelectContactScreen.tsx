@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as Contacts from 'expo-contacts';
 import { logger } from '../../../utils/logger';
+import { chatService } from '../services/chatService';
+import { useAuthStore } from '../../auth/stores/authStore';
 
 type Contact = {
   id: string;
@@ -17,6 +19,9 @@ export default function SelectContactScreen() {
   const navigation = useNavigation();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creatingChat, setCreatingChat] = useState(false);
+  const user = useAuthStore(state => state.user);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
 
   useEffect(() => {
     loadContacts();
@@ -72,11 +77,62 @@ export default function SelectContactScreen() {
     }
   };
 
-  const handleSelectContact = (contact: Contact) => {
-    logger.info('SelectContactScreen', 'Contact selected', { contactId: contact.id });
-    // TODO: Create chat with contact
-    navigation.goBack();
+  const handleSelectContact = async (contact: Contact) => {
+    if (!contact.email || !user) {
+      logger.warn('SelectContactScreen', 'Invalid contact or user state', { 
+        hasEmail: !!contact.email,
+        hasUser: !!user 
+      });
+      return;
+    }
+
+    setCreatingChat(true);
+    setSelectedContact(contact);
+    try {
+      logger.info('SelectContactScreen', 'Creating chat with contact', { 
+        contactId: contact.id,
+        contactEmail: contact.email 
+      });
+      
+      const chatId = await chatService.createChat(user.uid, contact.email);
+      
+      logger.info('SelectContactScreen', 'Chat created successfully', { chatId });
+      navigation.navigate('Chat', { chatId });
+    } catch (error: any) {
+      logger.error('SelectContactScreen', 'Failed to create chat', { error });
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to create chat. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setCreatingChat(false);
+      setSelectedContact(null);
+    }
   };
+
+  const renderContactItem = ({ item }: { item: Contact }) => (
+    <TouchableOpacity 
+      style={styles.contactItem}
+      onPress={() => handleSelectContact(item)}
+      disabled={creatingChat}
+    >
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>
+          {item.name.charAt(0)}
+        </Text>
+      </View>
+      <View style={styles.contactInfo}>
+        <Text style={styles.contactName}>{item.name}</Text>
+        {item.email && (
+          <Text style={styles.contactEmail}>{item.email}</Text>
+        )}
+      </View>
+      {creatingChat && item.email === selectedContact?.email && (
+        <ActivityIndicator size="small" color="#2563EB" />
+      )}
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -110,24 +166,7 @@ export default function SelectContactScreen() {
         <FlatList
           data={contacts}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity 
-              style={styles.contactItem}
-              onPress={() => handleSelectContact(item)}
-            >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {item.name.charAt(0)}
-                </Text>
-              </View>
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>{item.name}</Text>
-                {item.email && (
-                  <Text style={styles.contactEmail}>{item.email}</Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          )}
+          renderItem={renderContactItem}
         />
       )}
     </SafeAreaView>

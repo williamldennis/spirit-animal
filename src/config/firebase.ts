@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 import Constants from 'expo-constants';
 
 const FIREBASE_CONFIG = {
@@ -16,7 +17,11 @@ if (!FIREBASE_CONFIG.apiKey) {
   throw new Error('Firebase configuration is missing. Please check your .env file.');
 }
 
+// Initialize Firebase
 const app = initializeApp(FIREBASE_CONFIG);
-const auth = getAuth(app);
 
-export { auth }; 
+// Initialize Firebase services
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+export { auth, db }; 

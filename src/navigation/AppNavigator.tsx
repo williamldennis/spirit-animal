@@ -5,8 +5,10 @@ import SignInScreen from '../features/auth/screens/SignInScreen';
 import SignUpScreen from '../features/auth/screens/SignUpScreen';
 import HomeScreen from '../features/home/screens/HomeScreen';
 import SelectContactScreen from '../features/chat/screens/SelectContactScreen';
+import ChatScreen from '../features/chat/screens/ChatScreen';
 import { RootStackParamList } from '../types/navigation';
 import { useAuthStore } from '../features/auth/stores/authStore';
+import { logger } from '../utils/logger';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -26,6 +28,13 @@ export default function AppNavigator() {
           <>
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="SelectContact" component={SelectContactScreen} />
+            <Stack.Screen 
+              name="Chat" 
+              component={ChatScreen}
+              options={{
+                animation: 'slide_from_right'
+              }}
+            />
           </>
         ) : (
           // Auth stack
