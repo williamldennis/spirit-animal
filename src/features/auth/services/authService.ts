@@ -4,43 +4,54 @@ import {
   signOut as firebaseSignOut
 } from 'firebase/auth';
 import { auth } from '../../../config/firebase';
+import { logger } from '../../../utils/logger';
 
 class AuthService {
   async signUp(email: string, password: string) {
+    logger.info('AuthService.signUp', 'Starting sign up process', { email });
     try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
         password
       );
+      logger.info('AuthService.signUp', 'Sign up successful', { userId: userCredential.user.uid });
       return userCredential.user;
     } catch (error: any) {
+      logger.error('AuthService.signUp', 'Sign up failed', { error });
       throw this.handleAuthError(error);
     }
   }
 
   async signIn(email: string, password: string) {
+    logger.info('AuthService.signIn', 'Starting sign in process', { email });
     try {
       const userCredential = await signInWithEmailAndPassword(
         auth,
         email,
         password
       );
+      logger.info('AuthService.signIn', 'Sign in successful', { userId: userCredential.user.uid });
       return userCredential.user;
     } catch (error: any) {
+      logger.error('AuthService.signIn', 'Sign in failed', { error });
       throw this.handleAuthError(error);
     }
   }
 
   async signOut() {
+    logger.info('AuthService.signOut', 'Starting sign out process');
     try {
       await firebaseSignOut(auth);
+      logger.info('AuthService.signOut', 'Sign out successful');
     } catch (error: any) {
+      logger.error('AuthService.signOut', 'Sign out failed', { error });
       throw this.handleAuthError(error);
     }
   }
 
   private handleAuthError(error: any) {
+    logger.debug('AuthService.handleAuthError', 'Processing auth error', { errorCode: error.code });
     switch (error.code) {
       case 'auth/email-already-in-use':
         return new Error('This email address is already registered. Please sign in or use a different email.');
@@ -57,7 +68,7 @@ class AuthService {
       case 'auth/internal-error':
         return new Error('An internal error occurred. Please try again later.');
       default:
-        console.error('Firebase Auth Error:', error);
+        logger.error('AuthService.handleAuthError', 'Unhandled auth error', { error });
         return new Error('An unexpected error occurred. Please try again.');
     }
   }

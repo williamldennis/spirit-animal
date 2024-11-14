@@ -18,7 +18,8 @@
     "react-native-screens": "~3.22.0",
     "firebase": "^10.8.0",
     "zustand": "^4.5.0",
-    "expo-constants": "~14.4.2"
+    "expo-constants": "~14.4.2",
+    "@expo/vector-icons": "^13.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

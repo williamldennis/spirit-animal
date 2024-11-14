@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../types/navigation';
 import { useAuthStore } from '../stores/authStore';
+import { logger } from '../../../utils/logger';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignUp'>;
 
@@ -15,40 +16,51 @@ export default function SignUpScreen({ navigation }: Props) {
   const { signUp, loading, error } = useAuthStore();
 
   const validateForm = () => {
-    // Reset validation error
+    logger.debug('SignUpScreen.validateForm', 'Starting form validation');
     setValidationError(null);
 
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setValidationError('Please enter a valid email address');
+      const error = 'Please enter a valid email address';
+      logger.warn('SignUpScreen.validateForm', 'Email validation failed', { email });
+      setValidationError(error);
       return false;
     }
 
     // Password validation
     if (password.length < 6) {
-      setValidationError('Password must be at least 6 characters long');
+      const error = 'Password must be at least 6 characters long';
+      logger.warn('SignUpScreen.validateForm', 'Password validation failed', { passwordLength: password.length });
+      setValidationError(error);
       return false;
     }
 
     // Password match validation
     if (password !== confirmPassword) {
-      setValidationError('Passwords do not match');
+      const error = 'Passwords do not match';
+      logger.warn('SignUpScreen.validateForm', 'Password match validation failed');
+      setValidationError(error);
       return false;
     }
 
+    logger.debug('SignUpScreen.validateForm', 'Form validation successful');
     return true;
   };
 
   const handleSignUp = async () => {
+    logger.info('SignUpScreen.handleSignUp', 'Starting sign up process');
     if (!validateForm()) {
+      logger.warn('SignUpScreen.handleSignUp', 'Form validation failed');
       return;
     }
 
     try {
       await signUp(email, password);
-      // You might want to navigate to a success screen or show a success message
+      logger.info('SignUpScreen.handleSignUp', 'Sign up successful');
+      // Navigation will happen automatically due to auth state change
     } catch (err) {
+      logger.error('SignUpScreen.handleSignUp', 'Sign up error', { error: err });
       // Error is handled by the store and displayed through the error prop
     }
   };

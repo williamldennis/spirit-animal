@@ -1,14 +1,60 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../types/navigation';
+import { useAuthStore } from '../stores/authStore';
+import { logger } from '../../../utils/logger';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignIn'>;
 
 export default function SignInScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const { signIn, loading, error } = useAuthStore();
+
+  const validateForm = () => {
+    logger.debug('SignInScreen.validateForm', 'Starting form validation');
+    setValidationError(null);
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      const error = 'Please enter a valid email address';
+      logger.warn('SignInScreen.validateForm', 'Email validation failed', { email });
+      setValidationError(error);
+      return false;
+    }
+
+    // Password validation
+    if (!password) {
+      const error = 'Password is required';
+      logger.warn('SignInScreen.validateForm', 'Password validation failed');
+      setValidationError(error);
+      return false;
+    }
+
+    logger.debug('SignInScreen.validateForm', 'Form validation successful');
+    return true;
+  };
+
+  const handleSignIn = async () => {
+    logger.info('SignInScreen.handleSignIn', 'Starting sign in process');
+    if (!validateForm()) {
+      logger.warn('SignInScreen.handleSignIn', 'Form validation failed');
+      return;
+    }
+
+    try {
+      await signIn(email, password);
+      logger.info('SignInScreen.handleSignIn', 'Sign in successful');
+      // Navigation will happen automatically due to auth state change
+    } catch (err) {
+      logger.error('SignInScreen.handleSignIn', 'Sign in error', { error: err });
+      // Error is handled by the store and displayed through the error prop
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -35,31 +81,69 @@ export default function SignInScreen({ navigation }: Props) {
 
         {/* Email/Password Form */}
         <View style={styles.form}>
+          {(error || validationError) && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>
+                {validationError || error}
+              </Text>
+            </View>
+          )}
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              (error || validationError) ? styles.inputError : undefined
+            ]}
             placeholder="Email"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              setValidationError(null);
+            }}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoComplete="email"
+            editable={!loading}
           />
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              (error || validationError) ? styles.inputError : undefined
+            ]}
             placeholder="Password"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              setValidationError(null);
+            }}
             secureTextEntry
+            editable={!loading}
+            autoComplete="off"
+            textContentType="oneTimeCode"
           />
-          <TouchableOpacity style={styles.signInButton}>
-            <Text style={styles.signInButtonText}>Sign In</Text>
+          <TouchableOpacity 
+            style={[styles.signInButton, loading && styles.signInButtonDisabled]}
+            onPress={handleSignIn}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.signInButtonText}>Sign In</Text>
+            )}
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity 
           style={styles.signUpButton}
-          onPress={() => navigation.navigate('SignUp')}
+          onPress={() => {
+            logger.debug('SignInScreen', 'Navigating to SignUp');
+            navigation.navigate('SignUp');
+          }}
+          disabled={loading}
         >
-          <Text style={styles.signUpButtonText}>Need an account? Sign up</Text>
+          <Text style={styles.signUpButtonText}>
+            Need an account? Sign up
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -163,5 +247,22 @@ const styles = StyleSheet.create({
     color: '#2563EB',
     fontSize: 14,
     fontWeight: '500',
+  },
+  errorContainer: {
+    backgroundColor: '#FEE2E2',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  inputError: {
+    borderColor: '#DC2626',
+  },
+  signInButtonDisabled: {
+    opacity: 0.7,
   },
 }); 
