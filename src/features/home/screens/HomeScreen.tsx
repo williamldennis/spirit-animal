@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { logger } from '../../../utils/logger';
 
 type TabType = {
   id: string;
@@ -17,6 +19,39 @@ const TABS: TabType[] = [
 
 export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState('chat');
+  const navigation = useNavigation();
+
+  const renderHeaderRight = () => {
+    if (activeTab === 'chat') {
+      return (
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => {
+              logger.debug('HomeScreen', 'Navigating to SelectContact');
+              navigation.navigate('SelectContact');
+            }}
+          >
+            <Feather name="edit" size={24} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton}>
+            <Feather name="more-vertical" size={24} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    return (
+      <View style={styles.headerRight}>
+        <TouchableOpacity style={styles.iconButton}>
+          <Feather name="search" size={24} color="#6B7280" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.iconButton}>
+          <Feather name="more-vertical" size={24} color="#6B7280" />
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -26,14 +61,7 @@ export default function HomeScreen() {
           {activeTab === 'chat' ? 'Messages' : 
            activeTab === 'calendar' ? 'Calendar' : 'Tasks'}
         </Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton}>
-            <Feather name="search" size={24} color="#6B7280" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Feather name="more-vertical" size={24} color="#6B7280" />
-          </TouchableOpacity>
-        </View>
+        {renderHeaderRight()}
       </View>
 
       {/* Main Content */}
