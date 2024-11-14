@@ -1,20 +1,22 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import Constants from 'expo-constants';
 
-// TODO: Move to secure configuration later
 const FIREBASE_CONFIG = {
-  apiKey: "your-actual-api-key",
-  authDomain: "your-actual-domain.firebaseapp.com",
-  projectId: "your-actual-project-id",
-  storageBucket: "your-actual-bucket.appspot.com",
-  messagingSenderId: "your-actual-sender-id",
-  appId: "your-actual-app-id"
+  apiKey: Constants.expoConfig?.extra?.firebaseApiKey,
+  authDomain: Constants.expoConfig?.extra?.firebaseAuthDomain,
+  projectId: Constants.expoConfig?.extra?.firebaseProjectId,
+  storageBucket: Constants.expoConfig?.extra?.firebaseStorageBucket,
+  messagingSenderId: Constants.expoConfig?.extra?.firebaseMessagingSenderId,
+  appId: Constants.expoConfig?.extra?.firebaseAppId,
 };
 
-// Initialize Firebase
-const app = initializeApp(FIREBASE_CONFIG);
+// Validate config
+if (!FIREBASE_CONFIG.apiKey) {
+  throw new Error('Firebase configuration is missing. Please check your .env file.');
+}
 
-// Initialize Auth
+const app = initializeApp(FIREBASE_CONFIG);
 const auth = getAuth(app);
 
 export { auth }; 
