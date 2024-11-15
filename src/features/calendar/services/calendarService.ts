@@ -15,6 +15,7 @@ const GOOGLE_CONFIG = {
   expoClientId: Constants.expoConfig?.extra?.googleExpoClientId,
 };
 
+// Use the appropriate client ID based on platform
 const CLIENT_ID = Platform.select({
   ios: GOOGLE_CONFIG.iosClientId,
   web: GOOGLE_CONFIG.webClientId,
@@ -26,17 +27,20 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events'
 ];
 
+// Use Expo's auth proxy service
 const redirectUri = AuthSession.makeRedirectUri({
-  scheme: 'com.willdennis.spiritanimal',
-  path: 'oauth2redirect',
+  useProxy: true,
+  projectNameForProxy: '@willdennis/spirit-animal'
 });
 
-console.log('Redirect URI:', redirectUri);
+// Log the redirect URI for configuration
+logger.info('CalendarService', 'Using redirect URI', { redirectUri });
 
 class CalendarService {
   private config = {
     authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenEndpoint: 'https://oauth2.googleapis.com/token',
+    revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
   };
 
   private request = new AuthSession.AuthRequest({
@@ -45,6 +49,10 @@ class CalendarService {
     redirectUri,
     responseType: AuthSession.ResponseType.Code,
     usePKCE: true,
+    extraParams: {
+      access_type: 'offline',
+      prompt: 'consent',
+    },
   });
 
   async connectGoogleCalendar(userId: string) {
