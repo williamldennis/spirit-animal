@@ -38,7 +38,7 @@ export default function AddTaskModal({ visible, onClose }: Props) {
       await taskService.createTask(user.uid, {
         title: title.trim(),
         description: description.trim(),
-        dueDate,
+        dueDate: showDatePicker ? dueDate : undefined,
         completed: false,
       });
 

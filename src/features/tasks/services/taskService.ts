@@ -4,13 +4,14 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { logger } from '../../../utils/logger';
+import { startOfDay, endOfDay, addDays, isToday, isTomorrow } from 'date-fns';
 
 export type Task = {
   id: string;
   title: string;
   description?: string;
   completed: boolean;
-  dueDate: Date;
+  dueDate?: Date;
   createdAt: Date;
   userId: string;
 };
@@ -25,6 +26,7 @@ class TaskService {
         userId,
         createdAt: Timestamp.now(),
         completed: false,
+        dueDate: task.dueDate ? Timestamp.fromDate(task.dueDate) : null,
       });
       
       logger.info('TaskService.createTask', 'Task created', { taskId: taskDoc.id });
@@ -46,32 +48,22 @@ class TaskService {
     }
   }
 
-  subscribeToDayTasks(userId: string, date: Date, callback: (tasks: Task[]) => void) {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    logger.info('TaskService.subscribeToDayTasks', 'Setting up tasks subscription', { 
-      userId, 
-      date: date.toISOString() 
-    });
+  subscribeToDayTasks(userId: string, callback: (tasks: Task[]) => void) {
+    logger.info('TaskService.subscribeToDayTasks', 'Setting up tasks subscription', { userId });
 
     const tasksRef = collection(db, 'tasks');
     const q = query(
       tasksRef,
       where('userId', '==', userId),
-      where('dueDate', '>=', startOfDay),
-      where('dueDate', '<=', endOfDay),
-      orderBy('dueDate', 'asc')
+      orderBy('dueDate', 'asc'),
+      orderBy('createdAt', 'desc')
     );
 
     return onSnapshot(q, (snapshot) => {
       const tasks = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        dueDate: doc.data().dueDate.toDate(),
+        dueDate: doc.data().dueDate?.toDate(),
         createdAt: doc.data().createdAt.toDate(),
       })) as Task[];
 
