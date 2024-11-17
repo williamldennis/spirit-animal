@@ -6,8 +6,8 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import Constants from 'expo-constants';
 
-const BROWSER_RESULT = WebBrowser.maybeCompleteAuthSession();
-logger.debug('CalendarService', 'WebBrowser session completion result', { BROWSER_RESULT });
+// Make sure to complete auth sessions
+WebBrowser.maybeCompleteAuthSession();
 
 // Get these values from Google Cloud Console
 const GOOGLE_CONFIG = {
@@ -16,93 +16,90 @@ const GOOGLE_CONFIG = {
   expoClientId: Constants.expoConfig?.extra?.googleExpoClientId,
 };
 
-// Log the available client IDs for debugging
-logger.debug('CalendarService', 'Available client IDs', {
-  web: GOOGLE_CONFIG.webClientId,
-  ios: GOOGLE_CONFIG.iosClientId,
-  expo: GOOGLE_CONFIG.expoClientId
-});
-
-// Always use web client ID when using Expo's auth proxy
+// Always use web client ID for OAuth flow
 const CLIENT_ID = GOOGLE_CONFIG.webClientId;
 
 if (!CLIENT_ID) {
   throw new Error('Google Web Client ID is not configured');
 }
 
+// Simplify to minimum required scopes
 const SCOPES = [
-  // Non-sensitive scopes
   'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/calendar.events.readonly',
-  'https://www.googleapis.com/auth/calendar.settings.readonly',
-  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-  'https://www.googleapis.com/auth/calendar.calendars.readonly',
-  'https://www.googleapis.com/auth/calendar.freebusy',
-  // Sensitive scopes
-  'https://www.googleapis.com/auth/calendar',
-  'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/calendar.acls',
-  'https://www.googleapis.com/auth/calendar.acls.readonly',
-  'https://www.googleapis.com/auth/calendar.calendars',
-  'https://www.googleapis.com/auth/calendar.events.owned',
-  'https://www.googleapis.com/auth/calendar.events.owned.readonly'
+  'https://www.googleapis.com/auth/calendar.events.readonly'
 ];
 
-// Create a fixed HTTPS redirect URI using auth.expo.io directly
-const redirectUri = 'https://auth.expo.io/@willdennis/spirit-animal';
+// Define Google OAuth endpoints
+const GOOGLE_OAUTH_CONFIG = {
+  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenEndpoint: 'https://oauth2.googleapis.com/token',
+} as const;
 
 class CalendarService {
-  private request = new AuthSession.AuthRequest({
-    clientId: CLIENT_ID,
-    scopes: SCOPES,
-    redirectUri,
-    responseType: AuthSession.ResponseType.Code,
-    usePKCE: false,
-    extraParams: {
-      access_type: 'offline',
-      prompt: 'consent',
-    },
-  });
+  private request: AuthSession.AuthRequest;
+
+  constructor() {
+    this.request = new AuthSession.AuthRequest({
+      clientId: CLIENT_ID,
+      scopes: SCOPES,
+      redirectUri: 'https://auth.expo.io/@willdennis/spirit-animal',
+      responseType: AuthSession.ResponseType.Code,
+      usePKCE: false,
+      extraParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
+    });
+
+    // Log initial configuration
+    logger.info('CalendarService', 'Initialized with config', {
+      clientId: CLIENT_ID,
+      redirectUri: this.request.redirectUri,
+      scopes: SCOPES
+    });
+
+    // Log auth configuration with async URL generation
+    this.request.makeAuthUrlAsync(GOOGLE_OAUTH_CONFIG)
+      .then(authUrl => {
+        logger.info('CalendarService', 'Auth Configuration', {
+          redirectUri: 'https://auth.expo.io/@willdennis/spirit-animal',
+          clientId: CLIENT_ID.substring(0, 10) + '...', // Log partial client ID for security
+          platform: Platform.OS,
+          authUrl
+        });
+      })
+      .catch(error => {
+        logger.error('CalendarService', 'Failed to generate auth URL', { error });
+      });
+  }
 
   async connectGoogleCalendar(userId: string) {
     try {
-      logger.info('CalendarService.connectGoogleCalendar', 'Starting connection', {
-        userId,
-        clientId: CLIENT_ID,
-        redirectUri,
-        scopes: SCOPES.length
+      logger.info('CalendarService.connectGoogleCalendar', 'Starting connection');
+
+      // Use explicit discovery endpoints
+      const result = await this.request.promptAsync(GOOGLE_OAUTH_CONFIG);
+
+      logger.info('CalendarService.connectGoogleCalendar', 'Auth result received', {
+        type: result.type,
+        hasCode: result.type === 'success' && 'code' in result.params
       });
 
-      logger.debug('CalendarService.connectGoogleCalendar', 'Starting OAuth prompt');
-
-      try {
-        const result = await this.request.promptAsync({
-          authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-          tokenEndpoint: 'https://oauth2.googleapis.com/token',
+      if (result.type === 'success' && 'code' in result.params) {
+        // Exchange the code for tokens
+        const tokens = await this.exchangeCodeForTokens(result.params.code);
+        
+        // Store the tokens
+        await this.storeCalendarTokens(userId, {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          expiresAt: new Date(Date.now() + tokens.expires_in * 1000),
         });
 
-        if (result.type === 'success' && result.params?.code) {
-          await this.storeCalendarTokens(userId, {
-            accessToken: result.params.code,
-            expiresAt: new Date(Date.now() + 3600 * 1000),
-          });
-
-          logger.info('CalendarService.connectGoogleCalendar', 'Successfully connected');
-          return true;
-        } else {
-          logger.warn('CalendarService.connectGoogleCalendar', 'Connection failed', { 
-            type: result.type,
-            error: result.error
-          });
-          return false;
-        }
-      } catch (promptError) {
-        logger.error('CalendarService.connectGoogleCalendar', 'Prompt error', {
-          error: promptError,
-          message: promptError instanceof Error ? promptError.message : 'Unknown error'
-        });
-        throw promptError;
+        return true;
       }
+
+      return false;
     } catch (error) {
       logger.error('CalendarService.connectGoogleCalendar', 'Connection error', { 
         error,
@@ -112,6 +109,26 @@ class CalendarService {
     }
   }
 
+  private async exchangeCodeForTokens(code: string) {
+    const tokenResponse = await fetch(GOOGLE_OAUTH_CONFIG.tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: CLIENT_ID,
+        redirect_uri: this.request.redirectUri,
+        grant_type: 'authorization_code',
+      }).toString(),
+    });
+
+    if (!tokenResponse.ok) {
+      throw new Error('Failed to exchange code for tokens');
+    }
+
+    return tokenResponse.json();
+  }
 
   private async storeCalendarTokens(userId: string, tokens: {
     accessToken: string;
