@@ -6,6 +6,8 @@ import { useNavigation } from '@react-navigation/native';
 import { logger } from '../../../utils/logger';
 import ChatList from '../../chat/components/ChatList';
 import CalendarScreen from '../../calendar/screens/CalendarScreen';
+import TaskList from '../../tasks/components/TaskList';
+import AddTaskModal from '../../tasks/components/AddTaskModal';
 
 type TabType = {
   id: string;
@@ -21,6 +23,7 @@ const TABS: TabType[] = [
 
 export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState('chat');
+  const [showAddTask, setShowAddTask] = useState(false);
   const navigation = useNavigation();
 
   const renderHeaderRight = () => {
@@ -35,6 +38,22 @@ export default function HomeScreen() {
             }}
           >
             <Feather name="edit" size={24} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton}>
+            <Feather name="more-vertical" size={24} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    if (activeTab === 'tasks') {
+      return (
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => setShowAddTask(true)}
+          >
+            <Feather name="plus" size={24} color="#6B7280" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton}>
             <Feather name="more-vertical" size={24} color="#6B7280" />
@@ -63,9 +82,13 @@ export default function HomeScreen() {
         return <CalendarScreen />;
       case 'tasks':
         return (
-          <View style={styles.centerContainer}>
-            <Text>Tasks Coming Soon</Text>
-          </View>
+          <>
+            <TaskList />
+            <AddTaskModal 
+              visible={showAddTask} 
+              onClose={() => setShowAddTask(false)} 
+            />
+          </>
         );
       default:
         return null;
