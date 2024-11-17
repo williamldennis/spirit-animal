@@ -4,9 +4,8 @@ const config = getDefaultConfig(__dirname);
 
 module.exports = {
   ...config,
-  server: {
-    port: 8081,
-    host: 'localhost'
-  },
-  watchFolders: [__dirname]
+  resolver: {
+    ...config.resolver,
+    sourceExts: [...config.resolver.sourceExts, 'cjs'],
+  }
 }; 

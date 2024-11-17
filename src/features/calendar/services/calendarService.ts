@@ -6,21 +6,10 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import Constants from 'expo-constants';
 
-// Ensure WebBrowser session completion and log result
 WebBrowser.maybeCompleteAuthSession();
 
 // Use hardcoded HTTPS redirect URI
 const redirectUri = 'https://auth.expo.io/@willdennis/spirit-animal';
-
-// Google Calendar API configuration
-const GOOGLE_CONFIG = {
-  clientId: Constants.expoConfig?.extra?.googleWebClientId,
-  scopes: [
-    'https://www.googleapis.com/auth/calendar.readonly',
-    'https://www.googleapis.com/auth/calendar.events'
-  ],
-  redirectUri
-};
 
 class CalendarService {
   private request: AuthSession.AuthRequest;
@@ -30,9 +19,12 @@ class CalendarService {
     
     try {
       this.request = new AuthSession.AuthRequest({
-        clientId: GOOGLE_CONFIG.clientId!,
-        scopes: GOOGLE_CONFIG.scopes,
-        redirectUri: GOOGLE_CONFIG.redirectUri,
+        clientId: Constants.expoConfig?.extra?.googleWebClientId!,
+        scopes: [
+          'https://www.googleapis.com/auth/calendar.readonly',
+          'https://www.googleapis.com/auth/calendar.events'
+        ],
+        redirectUri,
         responseType: AuthSession.ResponseType.Code,
         usePKCE: false,
         extraParams: {
@@ -41,7 +33,7 @@ class CalendarService {
         }
       });
 
-      logger.debug('CalendarService', 'Request initialized', {
+      logger.debug('CalendarService', 'Request configuration', {
         redirectUri: this.request.redirectUri,
         responseType: this.request.responseType,
         usePKCE: this.request.usePKCE
@@ -56,58 +48,27 @@ class CalendarService {
     try {
       logger.info('CalendarService.connectGoogleCalendar', 'Starting connection');
 
-      // Log the request state before generating URL
-      logger.debug('CalendarService.connectGoogleCalendar', 'Request state', {
-        hasRequest: !!this.request,
-        requestProps: Object.keys(this.request)
-      });
-
-      // Generate auth URL with detailed logging
-      const authUrl = await this.request.makeAuthUrlAsync({
-        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth'
+      const result = await this.request.promptAsync({
+        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenEndpoint: 'https://oauth2.googleapis.com/token'
       });
       
-      logger.info('CalendarService.connectGoogleCalendar', 'Auth URL generated', { 
-        authUrl,
-        redirectUri: GOOGLE_CONFIG.redirectUri
+      logger.info('CalendarService.connectGoogleCalendar', 'Auth result received', {
+        type: result.type,
+        hasParams: !!result.params,
+        error: result.error
       });
 
-      // Attempt the OAuth flow with detailed error handling
-      logger.info('CalendarService.connectGoogleCalendar', 'Prompting for auth');
-      try {
-        const result = await this.request.promptAsync({
-          authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-          tokenEndpoint: 'https://oauth2.googleapis.com/token'
+      if (result.type === 'success' && result.params?.code) {
+        await this.storeCalendarTokens(userId, {
+          accessToken: result.params.code,
+          expiresAt: new Date(Date.now() + 3600 * 1000)
         });
 
-        logger.info('CalendarService.connectGoogleCalendar', 'Auth completed', {
-          type: result.type,
-          hasParams: !!result.params,
-          error: result.error
-        });
-
-        if (result.type === 'success' && result.params?.code) {
-          logger.info('CalendarService.connectGoogleCalendar', 'Exchanging code for tokens');
-          
-          const tokens = await this.exchangeCodeForTokens(result.params.code);
-          await this.storeCalendarTokens(userId, tokens);
-          
-          logger.info('CalendarService.connectGoogleCalendar', 'Successfully connected');
-          return true;
-        }
-
-        logger.warn('CalendarService.connectGoogleCalendar', 'Auth failed', {
-          type: result.type,
-          error: result.error
-        });
-        return false;
-      } catch (promptError) {
-        logger.error('CalendarService.connectGoogleCalendar', 'Prompt error', {
-          error: promptError,
-          message: promptError instanceof Error ? promptError.message : 'Unknown error'
-        });
-        throw promptError;
+        return true;
       }
+
+      return false;
     } catch (error) {
       logger.error('CalendarService.connectGoogleCalendar', 'Connection error', { 
         error,
@@ -139,32 +100,6 @@ class CalendarService {
       calendarTokens: tokens,
       calendarConnected: true,
     }, { merge: true });
-  }
-
-  private async exchangeCodeForTokens(code: string) {
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        code,
-        client_id: GOOGLE_CONFIG.clientId!,
-        redirect_uri: GOOGLE_CONFIG.redirectUri,
-        grant_type: 'authorization_code',
-      }).toString(),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to exchange code for tokens');
-    }
-
-    const data = await response.json();
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresAt: new Date(Date.now() + data.expires_in * 1000)
-    };
   }
 }
 

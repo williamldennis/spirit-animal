@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config();
 
 export default {
   expo: {
@@ -52,5 +53,9 @@ export default {
       ]
     ],
     scheme: 'com.willdennis.spiritanimal',
+    experiments: {
+      tsconfigPaths: true,
+      newArchEnabled: true
+    }
   }
 }; 

@@ -6,4 +6,11 @@ export type RootStackParamList = {
   Chat: {
     chatId: string;
   };
-}; 
+};
+
+// Add type safety for useNavigation
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
+} 
