@@ -5,9 +5,11 @@ import { useAuthStore } from '../../auth/stores/authStore';
 import { AIService } from '../services/aiService';
 import { AIResponse } from '../types';
 import { chatService } from '../../chat/services/chatService';
+import { taskService } from '../../tasks/services/taskService';
 import { logger } from '../../../utils/logger';
 import * as Contacts from 'expo-contacts';
-import { Contact } from '../../chat/screens/SelectContactScreen';
+import { Contact } from '../../../types/contact';
+import { Message } from '../../chat/types';
 
 const aiService = new AIService();
 
@@ -17,7 +19,7 @@ export const useAI = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [allChats, setAllChats] = useState<{ [chatId: string]: Message[] }>({});
   
-  const { tasks, createTask } = useTaskStore();
+  const { tasks } = useTaskStore();
   const { messages } = useChatStore();
   const { user } = useAuthStore();
 
@@ -30,26 +32,23 @@ export const useAI = () => {
           const { data } = await Contacts.getContactsAsync({
             fields: [Contacts.Fields.Emails, Contacts.Fields.Name],
           });
-          
           const formattedContacts = data
-            .filter(contact => contact.name)
+            .filter(contact => contact.name && contact.emails?.[0]?.email)
             .map(contact => ({
               id: contact.id,
-              name: contact.name || 'No Name',
-              email: contact.emails?.[0]?.email,
+              name: contact.name || '',
+              email: contact.emails?.[0]?.email || '',
             }));
-          
           setContacts(formattedContacts);
         }
       } catch (error) {
         logger.error('useAI.loadContacts', 'Failed to load contacts', { error });
       }
     };
-
     loadContacts();
   }, []);
 
-  // Load all chats
+  // Load all chats and messages
   useEffect(() => {
     if (!user) return;
 
@@ -95,7 +94,15 @@ export const useAI = () => {
         
         switch (response.action.type) {
           case 'create_task':
-            await createTask(response.action.parameters);
+            await taskService.createTask(user.uid, {
+              title: response.action.parameters.title,
+              description: response.action.parameters.description,
+              dueDate: response.action.parameters.dueDate ? new Date(response.action.parameters.dueDate) : undefined,
+              completed: false
+            });
+            logger.info('useAI', 'Task created successfully', { 
+              title: response.action.parameters.title 
+            });
             break;
           case 'send_message':
             const { chatId, content } = response.action.parameters;
@@ -118,7 +125,10 @@ export const useAI = () => {
     processUserInput,
     isProcessing,
     error,
-    hasContacts: contacts.length > 0,
-    hasChats: Object.keys(allChats).length > 0
+    hasContext: {
+      contacts: contacts.length > 0,
+      chats: Object.keys(allChats).length > 0,
+      tasks: tasks.length > 0
+    }
   };
 }; 

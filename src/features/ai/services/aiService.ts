@@ -4,21 +4,17 @@ import { Message } from '../../chat/types';
 import { AIResponse, AIAction } from '../types';
 import { ENV } from '../../../config/env';
 import { format } from 'date-fns';
-import { Contact } from '../../chat/screens/SelectContactScreen';
-import { ChatService } from '../../chat/services/chatService';
-import { UserService } from '../../auth/services/userService';
+import { Contact } from '../../../types/contact';
+import { chatService } from '../../chat/services/chatService';
+import { userService } from '../../auth/services/userService';
 
 export class AIService {
   private openai: OpenAI;
-  private chatService: ChatService;
-  private userService: UserService;
   
-  constructor(chatService: ChatService, userService: UserService) {
+  constructor() {
     this.openai = new OpenAI({
       apiKey: ENV.OPENAI_API_KEY,
     });
-    this.chatService = chatService;
-    this.userService = userService;
   }
 
   async processUserInput(
@@ -272,9 +268,10 @@ Keep responses concise and action-oriented.`;
     const functionCall = message.function_call;
 
     if (functionCall) {
+      const parameters = JSON.parse(functionCall.arguments);
       const action: AIAction = {
         type: functionCall.name as 'create_task' | 'send_message',
-        parameters: JSON.parse(functionCall.arguments)
+        parameters: this.formatActionParameters(functionCall.name, parameters)
       };
 
       return {
@@ -287,5 +284,19 @@ Keep responses concise and action-oriented.`;
     return {
       text: message.content
     };
+  }
+
+  private formatActionParameters(actionType: string, parameters: any) {
+    switch (actionType) {
+      case 'create_task':
+        return {
+          title: parameters.title,
+          description: parameters.description || '',
+          dueDate: parameters.dueDate ? new Date(parameters.dueDate) : undefined,
+          priority: parameters.priority || 'medium',
+        };
+      default:
+        return parameters;
+    }
   }
 } 

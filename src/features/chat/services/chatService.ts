@@ -28,7 +28,7 @@ const convertTimestamp = (timestamp: any): Date => {
   return new Date();
 };
 
-class ChatService {
+export class ChatService {
   async createChat(currentUserId: string, contactEmail: string) {
     try {
       logger.info('ChatService.createChat', 'Looking up contact', { contactEmail });

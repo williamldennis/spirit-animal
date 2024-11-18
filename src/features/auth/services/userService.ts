@@ -2,14 +2,14 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { logger } from '../../../utils/logger';
 
-export type UserProfile = {
+export interface UserProfile {
   id: string;
   email: string;
   name: string;
   createdAt: Date;
-};
+}
 
-class UserService {
+export class UserService {
   async createUserProfile(userId: string, email: string) {
     try {
       logger.info('UserService.createUserProfile', 'Creating user profile', { userId });
