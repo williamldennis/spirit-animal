@@ -70,7 +70,11 @@ export default {
     ],
     scheme: 'com.willdennis.spiritanimal',
     experiments: {
-      tsconfigPaths: true,
+      tsconfigPaths: true
+    },
+    jsEngine: "hermes",
+    _internal: {
+      isDebug: false,
       newArchEnabled: true
     }
   }

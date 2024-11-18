@@ -214,6 +214,84 @@ class ChatService {
       logger.error('ChatService.subscribeToChats', 'Subscription error', { error });
     });
   }
+
+  async getAllChats(userId: string): Promise<Chat[]> {
+    const chatsRef = collection(db, 'chats');
+    const q = query(
+      chatsRef,
+      where('participants', 'array-contains', userId)
+    );
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Chat[];
+  }
+
+  async getChatMessages(chatId: string): Promise<Message[]> {
+    const messagesRef = collection(db, `chats/${chatId}/messages`);
+    const q = query(messagesRef, orderBy('createdAt', 'desc'));
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      timestamp: doc.data().createdAt.toDate()
+    })) as Message[];
+  }
+
+  async findOrCreateChatWithEmail(currentUserId: string, targetEmail: string): Promise<string> {
+    try {
+      logger.info('ChatService.findOrCreateChatWithEmail', 'Looking up user by email', { targetEmail });
+      
+      // First, find the user with this email
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', targetEmail));
+      const userSnapshot = await getDocs(q);
+      
+      if (userSnapshot.empty) {
+        throw new Error(`No user found with email: ${targetEmail}`);
+      }
+
+      const targetUserId = userSnapshot.docs[0].id;
+
+      // Look for existing chat
+      const chatsRef = collection(db, 'chats');
+      const chatsQuery = query(
+        chatsRef,
+        where('participants', 'array-contains', currentUserId)
+      );
+      
+      const existingChats = await getDocs(chatsQuery);
+      const existingChat = existingChats.docs.find(doc => {
+        const data = doc.data();
+        return data.participants.includes(targetUserId);
+      });
+
+      if (existingChat) {
+        return existingChat.id;
+      }
+
+      // Create new chat if none exists
+      const newChatRef = await addDoc(chatsRef, {
+        participants: [currentUserId, targetUserId],
+        createdAt: Timestamp.now(),
+        lastMessage: null,
+        lastMessageAt: null
+      });
+
+      logger.info('ChatService.findOrCreateChatWithEmail', 'Created new chat', { 
+        chatId: newChatRef.id,
+        participants: [currentUserId, targetUserId]
+      });
+
+      return newChatRef.id;
+    } catch (error) {
+      logger.error('ChatService.findOrCreateChatWithEmail', 'Failed to find/create chat', { error });
+      throw error;
+    }
+  }
 }
 
 export const chatService = new ChatService(); 

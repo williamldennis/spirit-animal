@@ -21,6 +21,7 @@ import { useAuthStore } from '../../auth/stores/authStore';
 import { Message, chatService } from '../services/chatService';
 import { Chat } from '../services/chatService';
 import { userService, UserProfile } from '../../auth/services/userService';
+import { SafeTextInput } from '../../../shared/components/SafeTextInput';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -164,13 +165,14 @@ export default function ChatScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Type a message..."
+          <SafeTextInput
             value={newMessage}
             onChangeText={setNewMessage}
+            placeholder="Type a message..."
             multiline
             maxLength={500}
+            style={styles.input}
+            editable={!sending}
           />
           <TouchableOpacity 
             style={styles.sendButton}

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../types/navigation';
 import { useAuthStore } from '../stores/authStore';
 import { logger } from '../../../utils/logger';
+import { SafeTextInput } from '../../../shared/components/SafeTextInput';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignIn'>;
 
@@ -88,33 +89,18 @@ export default function SignInScreen({ navigation }: Props) {
               </Text>
             </View>
           )}
-          <TextInput
-            style={[
-              styles.input,
-              (error || validationError) ? styles.inputError : undefined
-            ]}
+          <SafeTextInput
             placeholder="Email"
             value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              setValidationError(null);
-            }}
+            onChangeText={setEmail}
             keyboardType="email-address"
-            autoCapitalize="none"
             autoComplete="email"
             editable={!loading}
           />
-          <TextInput
-            style={[
-              styles.input,
-              (error || validationError) ? styles.inputError : undefined
-            ]}
+          <SafeTextInput
             placeholder="Password"
             value={password}
-            onChangeText={(text) => {
-              setPassword(text);
-              setValidationError(null);
-            }}
+            onChangeText={setPassword}
             secureTextEntry
             editable={!loading}
             autoComplete="off"

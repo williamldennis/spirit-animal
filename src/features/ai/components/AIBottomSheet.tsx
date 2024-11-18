@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Modal, TouchableOpacity, Text } from 'react-native';
 import { AIAssistant } from './AIAssistant';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
 
 type Props = {
   visible: boolean;
@@ -10,6 +11,13 @@ type Props = {
 
 export const AIBottomSheet = ({ visible, onClose }: Props) => {
   const insets = useSafeAreaInsets();
+  const route = useRoute();
+  
+  // Get current chat context if we're in a chat screen
+  const currentChatContext = route.name === 'Chat' ? {
+    chatId: route.params?.chatId,
+    contact: route.params?.contact
+  } : undefined;
 
   return (
     <Modal
@@ -35,7 +43,7 @@ export const AIBottomSheet = ({ visible, onClose }: Props) => {
 
           {/* AI Assistant */}
           <View style={styles.content}>
-            <AIAssistant />
+            <AIAssistant currentChatContext={currentChatContext} />
           </View>
         </View>
       </View>

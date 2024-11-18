@@ -7,6 +7,7 @@ import * as Contacts from 'expo-contacts';
 import { logger } from '../../../utils/logger';
 import { chatService } from '../services/chatService';
 import { useAuthStore } from '../../auth/stores/authStore';
+import { SafeTextInput } from '../../../shared/components/SafeTextInput';
 
 type Contact = {
   id: string;
@@ -22,6 +23,7 @@ export default function SelectContactScreen() {
   const [creatingChat, setCreatingChat] = useState(false);
   const user = useAuthStore(state => state.user);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadContacts();
@@ -150,7 +152,12 @@ export default function SelectContactScreen() {
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Feather name="search" size={20} color="#6B7280" />
-        <Text style={styles.searchPlaceholder}>Search contacts...</Text>
+        <SafeTextInput
+          placeholder="Search contacts..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchInput}
+        />
       </View>
 
       {/* Contacts List */}
@@ -204,7 +211,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  searchPlaceholder: {
+  searchInput: {
     marginLeft: 8,
     color: '#6B7280',
     fontSize: 16,

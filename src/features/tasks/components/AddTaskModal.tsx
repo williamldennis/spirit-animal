@@ -16,6 +16,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { taskService } from '../services/taskService';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { logger } from '../../../utils/logger';
+import { SafeTextInput } from '../../../shared/components/SafeTextInput';
 
 type Props = {
   visible: boolean;
@@ -73,8 +74,7 @@ export default function AddTaskModal({ visible, onClose }: Props) {
             </View>
 
             <View style={styles.form}>
-              <TextInput
-                style={styles.input}
+              <SafeTextInput
                 placeholder="Task title"
                 value={title}
                 onChangeText={setTitle}
@@ -82,14 +82,14 @@ export default function AddTaskModal({ visible, onClose }: Props) {
                 autoFocus
               />
 
-              <TextInput
-                style={[styles.input, styles.textArea]}
+              <SafeTextInput
                 placeholder="Description (optional)"
                 value={description}
                 onChangeText={setDescription}
                 multiline
                 numberOfLines={3}
                 maxLength={500}
+                style={styles.textArea}
               />
 
               <TouchableOpacity 

@@ -1,4 +1,11 @@
 {
-  "name": "spirit-animal",
-  "slug": "spirit-animal"
+  "expo": {
+    "name": "spirit-animal",
+    "slug": "spirit-animal",
+    "jsEngine": "hermes",
+    "_internal": {
+      "isDebug": false,
+      "newArchEnabled": true
+    }
+  }
 }
