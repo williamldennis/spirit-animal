@@ -6,6 +6,7 @@ export interface AIAction {
 export interface AIResponse {
   text: string;
   action?: AIAction;
+  confirmation?: string;
 }
 
 export interface AIState {

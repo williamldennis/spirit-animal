@@ -254,6 +254,19 @@ If a contact is not found, inform the user that you need a valid contact email a
 Keep responses concise and action-oriented.`;
   }
 
+  private getActionConfirmation(action: AIAction): string {
+    switch (action.type) {
+      case 'send_message':
+        return `I've sent your message: "${action.parameters.content}"`;
+      case 'create_task':
+        return `I've created a task: "${action.parameters.title}"${
+          action.parameters.dueDate ? ` due on ${new Date(action.parameters.dueDate).toLocaleDateString()}` : ''
+        }`;
+      default:
+        return 'Action completed successfully.';
+    }
+  }
+
   private parseAIResponse(response: any): AIResponse {
     const message = response.choices[0].message;
     const functionCall = message.function_call;
@@ -266,7 +279,8 @@ Keep responses concise and action-oriented.`;
 
       return {
         text: message.content,
-        action
+        action,
+        confirmation: this.getActionConfirmation(action)
       };
     }
 

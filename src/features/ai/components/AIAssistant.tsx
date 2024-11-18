@@ -2,75 +2,90 @@ import React, { useState } from 'react';
 import { 
   View, 
   Text, 
-  TextInput, 
   TouchableOpacity, 
   ActivityIndicator, 
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
-  NativeEventSubscription,
-  Keyboard
+  Keyboard,
+  FlatList,
+  KeyboardAvoidingView
 } from 'react-native';
 import { useAI } from '../hooks/useAI';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeTextInput } from '../../../shared/components/SafeTextInput';
+import { Feather } from '@expo/vector-icons';
 
 export const AIAssistant = () => {
   const [input, setInput] = useState('');
   const { processUserInput, isProcessing, error } = useAI();
   const [conversation, setConversation] = useState<Array<{
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'confirmation';
     content: string;
   }>>([]);
+  const insets = useSafeAreaInsets();
 
   const handleSend = async () => {
     if (!input.trim() || isProcessing) return;
 
     const userMessage = input;
     setInput('');
-    Keyboard.dismiss();
     
     setConversation(prev => [...prev, { role: 'user', content: userMessage }]);
 
     try {
       const response = await processUserInput(userMessage);
+      
       setConversation(prev => [...prev, { 
         role: 'assistant', 
         content: response.text 
       }]);
+
+      if (response.confirmation) {
+        setConversation(prev => [...prev, {
+          role: 'confirmation',
+          content: response.confirmation || ''
+        }]);
+      }
     } catch (err) {
       console.error('Error processing message:', err);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <View style={styles.conversation}>
-        {conversation.map((message, index) => (
+    <View style={styles.container}>
+      <FlatList
+        data={conversation}
+        keyExtractor={(_, index) => index.toString()}
+        style={styles.flatList}
+        contentContainerStyle={styles.conversationContainer}
+        inverted={false}
+        renderItem={({ item }) => (
           <View 
-            key={index} 
             style={[
               styles.message,
-              message.role === 'user' ? styles.userMessage : styles.aiMessage
+              item.role === 'user' ? styles.userMessage : 
+              item.role === 'confirmation' ? styles.confirmationMessage :
+              styles.aiMessage
             ]}
           >
             <Text style={[
               styles.messageText,
-              message.role === 'user' ? styles.userMessageText : styles.aiMessageText
+              item.role === 'user' ? styles.userMessageText : 
+              item.role === 'confirmation' ? styles.confirmationMessageText :
+              styles.aiMessageText
             ]}>
-              {message.content}
+              {item.content}
             </Text>
           </View>
-        ))}
-        {isProcessing && (
-          <ActivityIndicator style={styles.loading} />
         )}
-      </View>
+      />
+
+      {isProcessing && (
+        <ActivityIndicator style={styles.loading} color="#2563EB" />
+      )}
 
       <View style={styles.inputContainer}>
-        <TextInput
+        <SafeTextInput
           value={input}
           onChangeText={setInput}
           placeholder="Ask anything..."
@@ -80,7 +95,6 @@ export const AIAssistant = () => {
           blurOnSubmit={false}
           autoCorrect={false}
           autoCapitalize="none"
-          keyboardType="default"
           returnKeyType="send"
           enablesReturnKeyAutomatically
           onSubmitEditing={handleSend}
@@ -88,28 +102,37 @@ export const AIAssistant = () => {
         <TouchableOpacity
           onPress={handleSend}
           disabled={isProcessing || !input.trim()}
-          style={[
-            styles.sendButton,
-            (!input.trim() || isProcessing) && styles.sendButtonDisabled
-          ]}
+          style={styles.sendButton}
         >
-          <Text style={styles.sendButtonText}>Send</Text>
+          <Feather 
+            name="send" 
+            size={24} 
+            color={input.trim() && !isProcessing ? '#2563EB' : '#9CA3AF'} 
+          />
         </TouchableOpacity>
       </View>
 
       {error && (
-        <Text style={styles.error}>{error.message}</Text>
+        <View style={styles.errorContainer}>
+          <Text style={styles.error}>{error.message}</Text>
+        </View>
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'white',
   },
-  conversation: {
+  keyboardAvoidingView: {
     flex: 1,
+  },
+  flatList: {
+    flex: 1,
+  },
+  conversationContainer: {
     padding: 16,
   },
   message: {
@@ -138,13 +161,14 @@ const styles = StyleSheet.create({
   },
   loading: {
     marginVertical: 8,
+    alignSelf: 'center',
   },
   inputContainer: {
     flexDirection: 'row',
     padding: 16,
+    backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
-    backgroundColor: 'white',
   },
   input: {
     flex: 1,
@@ -154,28 +178,32 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     fontSize: 16,
     maxHeight: 100,
+    minHeight: 40,
   },
   sendButton: {
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 70,
+    padding: 8,
+    alignSelf: 'flex-end',
   },
-  sendButtonDisabled: {
-    backgroundColor: '#93C5FD',
-  },
-  sendButtonText: {
-    color: 'white',
-    fontWeight: '600',
+  errorContainer: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: '#FEE2E2',
+    padding: 16,
+    borderRadius: 8,
   },
   error: {
     color: '#DC2626',
-    padding: 16,
-    backgroundColor: '#FEE2E2',
-    margin: 16,
-    borderRadius: 8,
-  }
+  },
+  confirmationMessage: {
+    backgroundColor: '#ECFDF5',
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  confirmationMessageText: {
+    color: '#059669',
+    fontStyle: 'italic',
+  },
 }); 

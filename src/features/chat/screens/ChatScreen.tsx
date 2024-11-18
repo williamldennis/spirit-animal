@@ -138,55 +138,55 @@ export default function ChatScreen() {
           <ActivityIndicator size="large" color="#2563EB" />
         </View>
       ) : (
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item.id}
-          inverted
-          contentContainerStyle={styles.messagesList}
-          renderItem={({ item }) => (
-            <View style={[
-              styles.messageContainer,
-              item.senderId === user?.uid ? styles.sentMessage : styles.receivedMessage
-            ]}>
-              <Text style={[
-                styles.messageText,
-                item.senderId === user?.uid ? styles.sentMessageText : styles.receivedMessageText
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <FlatList
+            data={messages}
+            keyExtractor={(item) => item.id}
+            inverted
+            contentContainerStyle={styles.messagesList}
+            renderItem={({ item }) => (
+              <View style={[
+                styles.messageContainer,
+                item.senderId === user?.uid ? styles.sentMessage : styles.receivedMessage
               ]}>
-                {item.text}
-              </Text>
-            </View>
-          )}
-        />
-      )}
-
-      {/* Message Input */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <View style={styles.inputContainer}>
-          <SafeTextInput
-            value={newMessage}
-            onChangeText={setNewMessage}
-            placeholder="Type a message..."
-            multiline
-            maxLength={500}
-            style={styles.input}
-            editable={!sending}
+                <Text style={[
+                  styles.messageText,
+                  item.senderId === user?.uid ? styles.sentMessageText : styles.receivedMessageText
+                ]}>
+                  {item.text}
+                </Text>
+              </View>
+            )}
           />
-          <TouchableOpacity 
-            style={styles.sendButton}
-            onPress={handleSendMessage}
-            disabled={!newMessage.trim()}
-          >
-            <Feather 
-              name="send" 
-              size={24} 
-              color={newMessage.trim() ? '#2563EB' : '#9CA3AF'} 
+
+          <View style={styles.inputContainer}>
+            <SafeTextInput
+              value={newMessage}
+              onChangeText={setNewMessage}
+              placeholder="Type a message..."
+              multiline
+              maxLength={500}
+              style={styles.input}
+              editable={!sending}
             />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+            <TouchableOpacity 
+              style={styles.sendButton}
+              onPress={handleSendMessage}
+              disabled={!newMessage.trim()}
+            >
+              <Feather 
+                name="send" 
+                size={24} 
+                color={newMessage.trim() ? '#2563EB' : '#9CA3AF'} 
+              />
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }
@@ -273,7 +273,6 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
     padding: 16,
     backgroundColor: 'white',
     borderTopWidth: 1,
@@ -281,12 +280,13 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 8,
     padding: 12,
     backgroundColor: '#F3F4F6',
-    borderRadius: 24,
+    borderRadius: 20,
     fontSize: 16,
     maxHeight: 100,
+    minHeight: 40,
   },
   sendButton: {
     padding: 8,
@@ -294,5 +294,8 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 12,
     color: '#6B7280',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
 }); 

@@ -1,8 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, Modal, TouchableOpacity, Text } from 'react-native';
+import { View, StyleSheet, Modal, TouchableOpacity, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { AIAssistant } from './AIAssistant';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
 
 type Props = {
   visible: boolean;
@@ -11,13 +10,6 @@ type Props = {
 
 export const AIBottomSheet = ({ visible, onClose }: Props) => {
   const insets = useSafeAreaInsets();
-  const route = useRoute();
-  
-  // Get current chat context if we're in a chat screen
-  const currentChatContext = route.name === 'Chat' ? {
-    chatId: route.params?.chatId,
-    contact: route.params?.contact
-  } : undefined;
 
   return (
     <Modal
@@ -26,7 +18,11 @@ export const AIBottomSheet = ({ visible, onClose }: Props) => {
       transparent
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.overlay}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
         <View style={[styles.container, { paddingBottom: insets.bottom }]}>
           {/* Handle */}
           <View style={styles.handleContainer}>
@@ -43,10 +39,10 @@ export const AIBottomSheet = ({ visible, onClose }: Props) => {
 
           {/* AI Assistant */}
           <View style={styles.content}>
-            <AIAssistant currentChatContext={currentChatContext} />
+            <AIAssistant />
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -61,7 +57,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    height: '80%', // Takes up 80% of screen height
+    height: '80%',
   },
   handleContainer: {
     alignItems: 'center',

@@ -76,6 +76,10 @@ export default {
     _internal: {
       isDebug: false,
       newArchEnabled: true
+    },
+    developmentClient: {
+      silentLaunch: true,
+      disableKeyboardHandling: true
     }
   }
 }; 
