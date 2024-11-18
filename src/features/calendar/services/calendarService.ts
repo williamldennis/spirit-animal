@@ -1,69 +1,58 @@
-import * as AuthSession from 'expo-auth-session';
+import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { logger } from '../../../utils/logger';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
-import Constants from 'expo-constants';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// Use hardcoded HTTPS redirect URI
-const redirectUri = 'https://auth.expo.io/@willdennis/spirit-animal';
-
 class CalendarService {
-  private request: AuthSession.AuthRequest;
+  private googleAuth: ReturnType<typeof Google.useAuthRequest> | null = null;
 
   constructor() {
     logger.debug('CalendarService', 'Initializing service');
-    
-    try {
-      this.request = new AuthSession.AuthRequest({
-        clientId: Constants.expoConfig?.extra?.googleWebClientId!,
-        scopes: [
-          'https://www.googleapis.com/auth/calendar.readonly',
-          'https://www.googleapis.com/auth/calendar.events'
-        ],
-        redirectUri,
-        responseType: AuthSession.ResponseType.Code,
-        usePKCE: false,
-        extraParams: {
-          access_type: 'offline',
-          prompt: 'consent'
-        }
-      });
+  }
 
-      logger.debug('CalendarService', 'Request configuration', {
-        redirectUri: this.request.redirectUri,
-        responseType: this.request.responseType,
-        usePKCE: this.request.usePKCE
-      });
-    } catch (error) {
-      logger.error('CalendarService', 'Failed to initialize request', { error });
-      throw error;
-    }
+  setGoogleAuth(auth: ReturnType<typeof Google.useAuthRequest>) {
+    this.googleAuth = auth;
   }
 
   async connectGoogleCalendar(userId: string) {
     try {
       logger.info('CalendarService.connectGoogleCalendar', 'Starting connection');
 
-      const result = await this.request.promptAsync({
-        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenEndpoint: 'https://oauth2.googleapis.com/token'
-      });
+      if (!this.googleAuth?.[2]) {
+        throw new Error('Google auth not initialized');
+      }
+
+      const [_, __, promptAsync] = this.googleAuth;
+      const result = await promptAsync();
       
       logger.info('CalendarService.connectGoogleCalendar', 'Auth result received', {
         type: result.type,
-        hasParams: !!result.params,
-        error: result.error
+        hasAuthentication: result.type === 'success' && !!result.authentication
       });
 
-      if (result.type === 'success' && result.params?.code) {
+      if (result.type === 'success' && result.authentication) {
         await this.storeCalendarTokens(userId, {
-          accessToken: result.params.code,
-          expiresAt: new Date(Date.now() + 3600 * 1000)
+          accessToken: result.authentication.accessToken,
+          expiresAt: new Date(Date.now() + (result.authentication.expiresIn || 3600) * 1000)
         });
+
+        // Verify the token works by making a test API call
+        const testResponse = await fetch(
+          'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+          {
+            headers: {
+              Authorization: `Bearer ${result.authentication.accessToken}`,
+            },
+          }
+        );
+
+        if (!testResponse.ok) {
+          throw new Error(`Calendar API test failed: ${await testResponse.text()}`);
+        }
 
         return true;
       }

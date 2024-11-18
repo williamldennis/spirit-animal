@@ -18,8 +18,21 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.willdennis.spiritanimal',
+      config: {
+        googleSignIn: {
+          reservedClientId: process.env.GOOGLE_IOS_CLIENT_ID
+        }
+      },
       infoPlist: {
-        NSContactsUsageDescription: 'Allow Spirit Animal to access your contacts so you can chat with them.'
+        NSContactsUsageDescription: 'Allow Spirit Animal to access your contacts so you can chat with them.',
+        CFBundleURLTypes: [
+          {
+            CFBundleURLSchemes: [
+              'com.willdennis.spiritanimal',
+              `com.googleusercontent.apps.${process.env.GOOGLE_IOS_CLIENT_ID?.split('.')[0]}`
+            ]
+          }
+        ]
       }
     },
     android: {
@@ -34,6 +47,9 @@ export default {
       favicon: './assets/favicon.png'
     },
     extra: {
+      eas: {
+        projectId: "c13f814a-6013-41f1-966a-827ca2d19d76"
+      },
       firebaseApiKey: process.env.FIREBASE_API_KEY,
       firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
       firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
@@ -42,7 +58,7 @@ export default {
       firebaseAppId: process.env.FIREBASE_APP_ID,
       googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID,
       googleIosClientId: process.env.GOOGLE_IOS_CLIENT_ID,
-      googleExpoClientId: process.env.GOOGLE_EXPO_CLIENT_ID,
+      openaiApiKey: process.env.OPENAI_API_KEY,
     },
     plugins: [
       [

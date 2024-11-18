@@ -8,6 +8,7 @@ import ChatList from '../../chat/components/ChatList';
 import CalendarScreen from '../../calendar/screens/CalendarScreen';
 import TaskList from '../../tasks/components/TaskList';
 import AddTaskModal from '../../tasks/components/AddTaskModal';
+import { AIBottomSheet } from '../../ai/components/AIBottomSheet';
 
 type TabType = {
   id: string;
@@ -24,6 +25,7 @@ const TABS: TabType[] = [
 export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState('chat');
   const [showAddTask, setShowAddTask] = useState(false);
+  const [showAI, setShowAI] = useState(false);
   const navigation = useNavigation();
 
   const renderHeaderRight = () => {
@@ -137,9 +139,18 @@ export default function HomeScreen() {
       </View>
 
       {/* AI FAB */}
-      <TouchableOpacity style={styles.fab}>
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => setShowAI(true)}
+      >
         <Text style={styles.fabText}>AI</Text>
       </TouchableOpacity>
+
+      {/* AI Bottom Sheet */}
+      <AIBottomSheet 
+        visible={showAI} 
+        onClose={() => setShowAI(false)} 
+      />
     </SafeAreaView>
   );
 }
