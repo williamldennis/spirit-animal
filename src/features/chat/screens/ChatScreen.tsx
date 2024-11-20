@@ -140,7 +140,7 @@ export default function ChatScreen() {
     >
       {item.type === 'ai_suggestion' && (
         <View style={styles.aiHeader}>
-          <Text style={styles.aiLabel}>AI Assistant</Text>
+          <Text style={styles.aiLabel}>🦊</Text>
         </View>
       )}
       <Text style={[
@@ -208,6 +208,51 @@ export default function ChatScreen() {
           />
 
           <View style={styles.inputContainer}>
+            <TouchableOpacity 
+              style={styles.aiButton}
+              onPress={async () => {
+                if (!newMessage.trim() || sending) return;
+                const trimmedMessage = newMessage.trim();
+                // First set the message to empty to prevent double-sending
+                setNewMessage('');
+                // Then send as AI message
+                const aiMessage = `@spiritanimal ${trimmedMessage}`;
+                try {
+                  setSending(true);
+                  // First send the user's message
+                  await chatService.sendMessage(chatId, user.uid, aiMessage);
+                  
+                  // Process with AI and send response
+                  const aiResponse = await processUserInput(trimmedMessage);
+                  if (aiResponse.text) {
+                    await chatService.sendMessage(chatId, 'ai-assistant', aiResponse.text, 'ai_suggestion');
+                  }
+                  
+                  // If there's a confirmation message, send it as well
+                  if (aiResponse.confirmation) {
+                    await chatService.sendMessage(
+                      chatId, 
+                      'ai-assistant',
+                      aiResponse.confirmation,
+                      'ai_suggestion'
+                    );
+                  }
+                } catch (error) {
+                  logger.error('ChatScreen', 'Error processing AI message', { error });
+                  Alert.alert('Error', 'Failed to process AI message. Please try again.');
+                } finally {
+                  setSending(false);
+                }
+              }}
+              disabled={!newMessage.trim() || sending}
+            >
+              <Text style={[
+                styles.aiButtonText,
+                (!newMessage.trim() || sending) && styles.aiButtonDisabled
+              ]}>
+                🦊
+              </Text>
+            </TouchableOpacity>
             <SafeTextInput
               value={newMessage}
               onChangeText={setNewMessage}
@@ -222,12 +267,12 @@ export default function ChatScreen() {
             <TouchableOpacity 
               style={styles.sendButton}
               onPress={handleSendMessage}
-              disabled={!newMessage.trim()}
+              disabled={!newMessage.trim() || sending}
             >
               <Feather 
                 name="send" 
                 size={24} 
-                color={newMessage.trim() ? '#2563EB' : '#9CA3AF'} 
+                color={newMessage.trim() && !sending ? '#2563EB' : '#9CA3AF'} 
               />
             </TouchableOpacity>
           </View>
@@ -331,9 +376,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   aiLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#4F46E5',
+    fontSize: 16,
+    marginBottom: 2,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -361,5 +405,18 @@ const styles = StyleSheet.create({
   },
   keyboardAvoidingView: {
     flex: 1,
+  },
+  aiButton: {
+    padding: 8,
+    marginRight: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aiButtonText: {
+    fontSize: 20,
+    opacity: 1,
+  },
+  aiButtonDisabled: {
+    opacity: 0.5,
   },
 }); 

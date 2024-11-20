@@ -143,7 +143,7 @@ export default function HomeScreen() {
         style={styles.fab}
         onPress={() => setShowAI(true)}
       >
-        <Text style={styles.fabText}>AI</Text>
+        <Text style={styles.fabText}>🦊</Text>
       </TouchableOpacity>
 
       {/* AI Bottom Sheet */}
@@ -204,9 +204,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 90,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',
@@ -217,9 +217,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   fabText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 24,
+    lineHeight: 28,
   },
   centerContainer: {
     flex: 1,

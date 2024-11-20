@@ -31,7 +31,7 @@ export const AIBottomSheet = ({ visible, onClose }: Props) => {
 
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>AI Assistant</Text>
+            <Text style={styles.title}>🦊 Spirit Animal</Text>
             <TouchableOpacity onPress={onClose}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
