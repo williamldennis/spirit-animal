@@ -84,6 +84,24 @@ class TaskService {
       throw error;
     }
   }
+
+  async updateTask(taskId: string, updates: Partial<Omit<Task, 'id' | 'userId'>>) {
+    try {
+      logger.info('TaskService.updateTask', 'Updating task', { taskId });
+      const taskRef = doc(db, 'tasks', taskId);
+      
+      const updateData = {
+        ...updates,
+        dueDate: updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null,
+      };
+      
+      await updateDoc(taskRef, updateData);
+      logger.info('TaskService.updateTask', 'Task updated successfully');
+    } catch (error) {
+      logger.error('TaskService.updateTask', 'Failed to update task', { error });
+      throw error;
+    }
+  }
 }
 
 export const taskService = new TaskService(); 

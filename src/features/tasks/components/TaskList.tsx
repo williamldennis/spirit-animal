@@ -13,6 +13,7 @@ import { taskService, Task } from '../services/taskService';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { logger } from '../../../utils/logger';
 import { isToday, isTomorrow } from 'date-fns';
+import EditTaskModal from './EditTaskModal';
 
 type TaskSection = {
   title: string;
@@ -24,6 +25,7 @@ export default function TaskList() {
   const [tasks, setTasks] = useState<TaskSection[]>([]);
   const [showCompleted, setShowCompleted] = useState(false);
   const user = useAuthStore(state => state.user);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -78,6 +80,10 @@ export default function TaskList() {
     }
   };
 
+  const handleTaskLongPress = (task: Task) => {
+    setEditingTask(task);
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -127,25 +133,38 @@ export default function TaskList() {
                 <Feather name="square" size={20} color="#9CA3AF" />
               )}
             </TouchableOpacity>
-            <View style={styles.taskContent}>
-              <Text style={[
-                styles.taskTitle,
-                item.completed && styles.taskTitleCompleted
-              ]}>
-                {item.title}
-              </Text>
+            <TouchableOpacity 
+              style={styles.taskContent}
+              onPress={() => handleTaskLongPress(item)}
+            >
+              <View style={styles.taskTitleRow}>
+                <Text style={[
+                  styles.taskTitle,
+                  item.completed && styles.taskTitleCompleted
+                ]}>
+                  {item.title}
+                </Text>
+                {item.dueDate && (
+                  <Text style={styles.taskDueDate}>
+                    {item.dueDate.toLocaleDateString()}
+                  </Text>
+                )}
+              </View>
               {item.description && (
                 <Text style={styles.taskDescription}>{item.description}</Text>
               )}
-              {item.dueDate && (
-                <Text style={styles.taskDate}>
-                  Due: {item.dueDate.toLocaleDateString()}
-                </Text>
-              )}
-            </View>
+            </TouchableOpacity>
           </View>
         )}
       />
+      
+      {editingTask && (
+        <EditTaskModal
+          visible={!!editingTask}
+          onClose={() => setEditingTask(null)}
+          task={editingTask}
+        />
+      )}
     </View>
   );
 }
@@ -218,9 +237,14 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     backgroundColor: '#F9FAFB',
   },
-  taskDate: {
+  taskTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  taskDueDate: {
     fontSize: 12,
     color: '#6B7280',
-    marginTop: 4,
+    marginLeft: 8,
   },
 }); 

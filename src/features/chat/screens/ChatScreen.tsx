@@ -407,11 +407,6 @@ const styles = StyleSheet.create({
     marginVertical: 4,
     padding: 12,
     borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
   },
   sentMessage: {
     alignSelf: 'flex-end',
