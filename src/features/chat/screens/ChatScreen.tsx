@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert
+  Alert,
+  ActionSheetIOS
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ import { Chat } from '../services/chatService';
 import { userService, UserProfile } from '../../auth/services/userService';
 import { SafeTextInput } from '../../../shared/components/SafeTextInput';
 import { useAI } from '../../ai/hooks/useAI';
+import { taskService } from '../../tasks/services/taskService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -128,30 +130,93 @@ export default function ChatScreen() {
     }
   };
 
+  const handleMessageLongPress = async (message: Message) => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Create Task'],
+          cancelButtonIndex: 0,
+          title: 'Message Options'
+        },
+        async (buttonIndex) => {
+          if (buttonIndex === 1) {
+            try {
+              await taskService.createTask(user?.uid || '', {
+                title: message.text,
+                description: `Created from chat with ${otherUser?.name || 'Unknown'}`,
+                completed: false,
+                createdAt: new Date()
+              });
+              Alert.alert('Success', 'Task created successfully!');
+            } catch (error) {
+              logger.error('ChatScreen', 'Error creating task', { error });
+              Alert.alert('Error', 'Failed to create task. Please try again.');
+            }
+          }
+        }
+      );
+    } else {
+      // For Android, we'll show a simple alert with options
+      Alert.alert(
+        'Message Options',
+        'What would you like to do?',
+        [
+          {
+            text: 'Create Task',
+            onPress: async () => {
+              try {
+                await taskService.createTask(user?.uid || '', {
+                  title: message.text,
+                  description: `Created from chat with ${otherUser?.name || 'Unknown'}`,
+                  completed: false,
+                  createdAt: new Date()
+                });
+                Alert.alert('Success', 'Task created successfully!');
+              } catch (error) {
+                logger.error('ChatScreen', 'Error creating task', { error });
+                Alert.alert('Error', 'Failed to create task. Please try again.');
+              }
+            }
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]
+      );
+    }
+  };
+
   // Update the message rendering to handle AI messages
   const renderMessage = ({ item }: { item: Message }) => (
-    <View 
-      style={[
-        styles.messageContainer,
-        item.senderId === user?.uid ? styles.sentMessage : 
-        item.type === 'ai_suggestion' ? styles.aiMessage :
-        styles.receivedMessage
-      ]}
+    <TouchableOpacity 
+      onLongPress={() => handleMessageLongPress(item)}
+      delayLongPress={500} // Half a second press to trigger
+      activeOpacity={0.7}
     >
-      {item.type === 'ai_suggestion' && (
-        <View style={styles.aiHeader}>
-          <Text style={styles.aiLabel}>🦊</Text>
-        </View>
-      )}
-      <Text style={[
-        styles.messageText,
-        item.senderId === user?.uid ? styles.sentMessageText : 
-        item.type === 'ai_suggestion' ? styles.aiMessageText :
-        styles.receivedMessageText
-      ]}>
-        {item.text}
-      </Text>
-    </View>
+      <View 
+        style={[
+          styles.messageContainer,
+          item.senderId === user?.uid ? styles.sentMessage : 
+          item.type === 'ai_suggestion' ? styles.aiMessage :
+          styles.receivedMessage
+        ]}
+      >
+        {item.type === 'ai_suggestion' && (
+          <View style={styles.aiHeader}>
+            <Text style={styles.aiLabel}>🦊</Text>
+          </View>
+        )}
+        <Text style={[
+          styles.messageText,
+          item.senderId === user?.uid ? styles.sentMessageText : 
+          item.type === 'ai_suggestion' ? styles.aiMessageText :
+          styles.receivedMessageText
+        ]}>
+          {item.text}
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -342,6 +407,11 @@ const styles = StyleSheet.create({
     marginVertical: 4,
     padding: 12,
     borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    elevation: 2,
   },
   sentMessage: {
     alignSelf: 'flex-end',
