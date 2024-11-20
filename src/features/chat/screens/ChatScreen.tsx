@@ -22,6 +22,7 @@ import { Message, chatService } from '../services/chatService';
 import { Chat } from '../services/chatService';
 import { userService, UserProfile } from '../../auth/services/userService';
 import { SafeTextInput } from '../../../shared/components/SafeTextInput';
+import { useAI } from '../../ai/hooks/useAI';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -36,6 +37,7 @@ export default function ChatScreen() {
   const route = useRoute<Props['route']>();
   const { chatId } = route.params;
   const user = useAuthStore(state => state.user);
+  const { processUserInput, isProcessing: aiProcessing } = useAI();
 
   // Load chat details and other user's profile
   useEffect(() => {
@@ -86,9 +88,37 @@ export default function ChatScreen() {
       return;
     }
 
+    const trimmedMessage = newMessage.trim();
     setSending(true);
+
     try {
-      await chatService.sendMessage(chatId, user.uid, newMessage.trim());
+      // Check if message is directed to AI
+      if (trimmedMessage.toLowerCase().startsWith('@spiritanimal')) {
+        const aiQuery = trimmedMessage.substring('@spiritanimal'.length).trim();
+        
+        // First send the user's message
+        await chatService.sendMessage(chatId, user.uid, trimmedMessage);
+        
+        // Process with AI and send response
+        const aiResponse = await processUserInput(aiQuery);
+        if (aiResponse.text) {
+          await chatService.sendMessage(chatId, 'ai-assistant', aiResponse.text, 'ai_suggestion');
+        }
+        
+        // If there's a confirmation message, send it as well
+        if (aiResponse.confirmation) {
+          await chatService.sendMessage(
+            chatId, 
+            'ai-assistant',
+            aiResponse.confirmation,
+            'ai_suggestion'
+          );
+        }
+      } else {
+        // Regular message
+        await chatService.sendMessage(chatId, user.uid, trimmedMessage);
+      }
+
       setNewMessage('');
     } catch (error) {
       logger.error('ChatScreen', 'Error sending message', { error });
@@ -97,6 +127,32 @@ export default function ChatScreen() {
       setSending(false);
     }
   };
+
+  // Update the message rendering to handle AI messages
+  const renderMessage = ({ item }: { item: Message }) => (
+    <View 
+      style={[
+        styles.messageContainer,
+        item.senderId === user?.uid ? styles.sentMessage : 
+        item.type === 'ai_suggestion' ? styles.aiMessage :
+        styles.receivedMessage
+      ]}
+    >
+      {item.type === 'ai_suggestion' && (
+        <View style={styles.aiHeader}>
+          <Text style={styles.aiLabel}>AI Assistant</Text>
+        </View>
+      )}
+      <Text style={[
+        styles.messageText,
+        item.senderId === user?.uid ? styles.sentMessageText : 
+        item.type === 'ai_suggestion' ? styles.aiMessageText :
+        styles.receivedMessageText
+      ]}>
+        {item.text}
+      </Text>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -148,30 +204,20 @@ export default function ChatScreen() {
             keyExtractor={(item) => item.id}
             inverted
             contentContainerStyle={styles.messagesList}
-            renderItem={({ item }) => (
-              <View style={[
-                styles.messageContainer,
-                item.senderId === user?.uid ? styles.sentMessage : styles.receivedMessage
-              ]}>
-                <Text style={[
-                  styles.messageText,
-                  item.senderId === user?.uid ? styles.sentMessageText : styles.receivedMessageText
-                ]}>
-                  {item.text}
-                </Text>
-              </View>
-            )}
+            renderItem={renderMessage}
           />
 
           <View style={styles.inputContainer}>
             <SafeTextInput
               value={newMessage}
               onChangeText={setNewMessage}
-              placeholder="Type a message..."
-              multiline
-              maxLength={500}
+              placeholder="Message or @spiritanimal for AI help..."
               style={styles.input}
-              editable={!sending}
+              multiline
+              maxLength={1000}
+              blurOnSubmit={false}
+              autoCorrect={false}
+              autoCapitalize="none"
             />
             <TouchableOpacity 
               style={styles.sendButton}
@@ -262,14 +308,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
+  aiMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
   messageText: {
     fontSize: 16,
+    lineHeight: 20,
   },
   sentMessageText: {
     color: 'white',
   },
   receivedMessageText: {
     color: '#111827',
+  },
+  aiMessageText: {
+    color: '#1E40AF',
+  },
+  aiHeader: {
+    marginBottom: 4,
+  },
+  aiLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#4F46E5',
   },
   inputContainer: {
     flexDirection: 'row',

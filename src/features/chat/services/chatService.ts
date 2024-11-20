@@ -105,14 +105,20 @@ export class ChatService {
     }
   }
 
-  async sendMessage(chatId: string, senderId: string, text: string) {
+  async sendMessage(
+    chatId: string, 
+    senderId: string, 
+    text: string,
+    type: 'text' | 'ai_suggestion' = 'text'
+  ) {
     try {
-      logger.info('ChatService.sendMessage', 'Sending message', { chatId, senderId });
+      logger.info('ChatService.sendMessage', 'Sending message', { chatId, senderId, type });
       
       const messagesRef = collection(db, `chats/${chatId}/messages`);
       const messageDoc = await addDoc(messagesRef, {
         text,
         senderId,
+        type,
         createdAt: Timestamp.now(),
       });
 
@@ -144,6 +150,7 @@ export class ChatService {
           id: doc.id,
           text: data.text || '',
           senderId: data.senderId || '',
+          type: data.type || 'text',
           createdAt: convertTimestamp(data.createdAt),
         };
       }) as Message[];
