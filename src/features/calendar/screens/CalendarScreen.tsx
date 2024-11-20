@@ -12,9 +12,18 @@ import { calendarService } from '../services/calendarService';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { logger } from '../../../utils/logger';
 
+// Add type for events
+interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: {
+    dateTime: string;
+  };
+}
+
 export default function CalendarScreen() {
   const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const user = useAuthStore(state => state.user);
 
@@ -43,13 +52,26 @@ export default function CalendarScreen() {
 
     try {
       setLoading(true);
+      logger.debug('CalendarScreen.handleConnectCalendar', 'Starting connection attempt', {
+        userId: user.uid,
+        hasAuth: calendarService.getGoogleAuthStatus()
+      });
+
       const success = await calendarService.connectGoogleCalendar(user.uid);
+      
+      logger.debug('CalendarScreen.handleConnectCalendar', 'Connection result', {
+        success
+      });
+
       if (success) {
         setIsConnected(true);
         fetchEvents();
       }
     } catch (error) {
-      logger.error('CalendarScreen', 'Failed to connect calendar', { error });
+      logger.error('CalendarScreen.handleConnectCalendar', 'Failed to connect', { 
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
       Alert.alert('Error', 'Failed to connect Google Calendar. Please try again.');
     } finally {
       setLoading(false);

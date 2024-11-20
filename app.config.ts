@@ -28,8 +28,7 @@ export default {
         CFBundleURLTypes: [
           {
             CFBundleURLSchemes: [
-              'com.willdennis.spiritanimal',
-              `com.googleusercontent.apps.${process.env.GOOGLE_IOS_CLIENT_ID?.split('.')[0]}`
+              'com.googleusercontent.apps.1042281418890-lf5ougfstfge53aausq1kgpkhm7id4m'
             ]
           }
         ]
@@ -66,9 +65,10 @@ export default {
         {
           contactsPermission: 'Allow Spirit Animal to access your contacts.'
         }
-      ]
+      ],
+      "expo-dev-client"
     ],
-    scheme: 'com.willdennis.spiritanimal',
+    scheme: 'com.googleusercontent.apps.1042281418890-lf5ougfstfge53aausq1kgpkhm7id4m',
     experiments: {
       tsconfigPaths: true
     },
