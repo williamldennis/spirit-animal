@@ -9,6 +9,7 @@ import { chatService } from '../../chat/services/chatService';
 import { userService } from '../../auth/services/userService';
 import { CalendarEventResponse } from '../../calendar/services/calendarService';
 import { isSameDay, isAfter } from 'date-fns';
+import { logger } from '../../../utils/logger';
 
 export class AIService {
   private openai: OpenAI;
@@ -30,6 +31,7 @@ export class AIService {
       currentChatId?: string;
       currentContact?: { name: string; email: string; };
       events?: CalendarEventResponse[];
+      conversationHistory?: Message[];
     }
   ): Promise<AIResponse> {
     try {
@@ -37,24 +39,29 @@ export class AIService {
         throw new Error('OpenAI API key is not configured');
       }
 
-      const tasksContext = this.formatTasksContext(context.tasks || []);
-      const messagesContext = this.formatAllMessagesContext(context.allChats || {}, context.currentChatId);
-      const contactsContext = this.formatContactsContext(context.contacts || [], context.currentContact);
-      const eventsContext = this.formatEventsContext(context.events || []);
+      const systemPrompt = this.getSystemPrompt({
+        tasksContext: this.formatTasksContext(context.tasks || []),
+        messagesContext: this.formatAllMessagesContext(context.allChats || {}, context.currentChatId),
+        contactsContext: this.formatContactsContext(context.contacts || [], context.currentContact),
+        eventsContext: this.formatEventsContext(context.events || [])
+      });
+
+      // Convert conversation history to OpenAI message format
+      const conversationMessages = (context.conversationHistory || []).map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }));
 
       const response = await this.openai.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
-            content: this.getSystemPrompt({
-              tasksContext,
-              messagesContext,
-              contactsContext,
-              eventsContext,
-              currentContact: context.currentContact
-            })
+            content: systemPrompt
           },
+          // Include all previous messages in the conversation
+          ...conversationMessages,
+          // Add the current user message
           {
             role: "user",
             content: input
@@ -98,16 +105,18 @@ export class AIService {
                 start: { 
                   type: "object",
                   properties: {
-                    dateTime: { type: "string", format: "date-time" }
+                    dateTime: { type: "string", format: "date-time" },
+                    timeZone: { type: "string" }
                   },
-                  required: ["dateTime"]
+                  required: ["dateTime", "timeZone"]
                 },
                 end: {
                   type: "object",
                   properties: {
-                    dateTime: { type: "string", format: "date-time" }
+                    dateTime: { type: "string", format: "date-time" },
+                    timeZone: { type: "string" }
                   },
-                  required: ["dateTime"]
+                  required: ["dateTime", "timeZone"]
                 }
               },
               required: ["summary", "start", "end"]
@@ -169,25 +178,37 @@ export class AIService {
   }
 
   private formatTasksContext(tasks: Task[]): string {
-    if (tasks.length === 0) return "No tasks available.";
+    if (!tasks || tasks.length === 0) {
+      return "No tasks available.";
+    }
+
+    logger.debug('AIService.formatTasksContext', 'Formatting tasks', { 
+      taskCount: tasks.length,
+      sampleTasks: tasks.slice(0, 3).map(t => t.title)
+    });
 
     const incompleteTasks = tasks.filter(task => !task.completed);
     const completedTasks = tasks.filter(task => task.completed);
 
-    return `
-Current Tasks:
-${incompleteTasks.map(task => `
-- ${task.title}
-  Priority: ${task.priority}
-  ${task.dueDate ? `Due: ${format(task.dueDate, 'PPP')}` : 'No due date'}
-  ${task.description ? `Description: ${task.description}` : ''}
-`).join('')}
+    let context = 'Current Tasks:\n';
 
-Recently Completed Tasks:
-${completedTasks.slice(0, 5).map(task => `
-- ${task.title} (Completed)
-`).join('')}
-    `;
+    if (incompleteTasks.length === 0) {
+      context += 'No incomplete tasks.\n';
+    } else {
+      context += incompleteTasks.map(task => `
+- ${task.title}
+  ${task.description ? `Description: ${task.description}` : ''}
+  ${task.dueDate ? `Due: ${format(new Date(task.dueDate), 'PPP')}` : 'No due date'}
+  Priority: ${task.priority || 'none'}
+`).join('');
+    }
+
+    if (completedTasks.length > 0) {
+      context += '\nRecently Completed Tasks:\n';
+      context += completedTasks.slice(0, 5).map(task => `- ${task.title} (Completed)`).join('\n');
+    }
+
+    return context;
   }
 
   private formatAllMessagesContext(chats: { [chatId: string]: Message[] }, currentChatId?: string): string {
@@ -282,15 +303,19 @@ ${upcomingEvents.map(event => `
     eventsContext: string;
     currentContact?: { name: string; email: string; };
   }): string {
-    return `You are an AI assistant in a productivity app. Here is your current context:
+    const prompt = `You are an AI assistant in a productivity app. Here is your current context:
 
-${context.contactsContext}
-
-${context.messagesContext}
-
+Tasks:
 ${context.tasksContext}
 
+Calendar:
 ${context.eventsContext}
+
+Messages:
+${context.messagesContext}
+
+Contacts:
+${context.contactsContext}
 
 You can:
 1. Answer questions about tasks, messages, and calendar events
@@ -298,17 +323,24 @@ You can:
 3. Send messages using send_message
 4. Create calendar events using create_event
 
-When creating calendar events:
-- Use the create_event function
-- Ensure start and end times are provided
-- Include relevant details in the description
+When summarizing tasks:
+- List incomplete tasks first
+- Include due dates and priorities if available
+- Mention the total number of tasks
+- Suggest task prioritization if asked
 
-When summarizing the day:
-- Include tasks, messages, and calendar events
-- Highlight any conflicts or overlapping events
-- Suggest task prioritization based on calendar availability
+Keep responses concise and action-oriented.
+Maintain conversation context and refer to previous messages when appropriate.
+If a user asks about "that" or "it", look at previous messages for context.`;
 
-Keep responses concise and action-oriented.`;
+    logger.debug('AIService.getSystemPrompt', 'Generated prompt with context', {
+      hasTaskContext: context.tasksContext !== "No tasks available.",
+      hasEventContext: context.eventsContext !== "No upcoming events.",
+      hasMessageContext: context.messagesContext !== "No messages available.",
+      hasContactContext: context.contactsContext !== "No contacts available."
+    });
+
+    return prompt;
   }
 
   private getActionConfirmation(action: AIAction): string {
@@ -318,6 +350,10 @@ Keep responses concise and action-oriented.`;
       case 'create_task':
         return `I've created a task: "${action.parameters.title}"${
           action.parameters.dueDate ? ` due on ${new Date(action.parameters.dueDate).toLocaleDateString()}` : ''
+        }`;
+      case 'create_event':
+        return `I've created an event: "${action.parameters.summary}" on ${
+          format(new Date(action.parameters.start.dateTime), 'PPp')
         }`;
       default:
         return 'Action completed successfully.';
@@ -330,8 +366,22 @@ Keep responses concise and action-oriented.`;
 
     if (functionCall) {
       const parameters = JSON.parse(functionCall.arguments);
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+      // Add timezone to event parameters if it's a create_event action
+      if (functionCall.name === 'create_event') {
+        parameters.start = {
+          ...parameters.start,
+          timeZone: timezone
+        };
+        parameters.end = {
+          ...parameters.end,
+          timeZone: timezone
+        };
+      }
+
       const action: AIAction = {
-        type: functionCall.name as 'create_task' | 'send_message',
+        type: functionCall.name as 'create_task' | 'send_message' | 'create_event',
         parameters: this.formatActionParameters(functionCall.name, parameters)
       };
 

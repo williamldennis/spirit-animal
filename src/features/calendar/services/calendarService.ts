@@ -325,15 +325,32 @@ class CalendarService {
         throw new Error('Calendar not connected');
       }
 
+      // Ensure timezone is set for both start and end times
+      const eventWithTimezone = {
+        ...eventData,
+        start: {
+          ...eventData.start,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone // Get user's timezone
+        },
+        end: {
+          ...eventData.end,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+      };
+
       const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
       
+      logger.debug('CalendarService.createEvent', 'Creating event with data', { 
+        eventData: eventWithTimezone 
+      });
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${tokens.accessToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(eventData)
+        body: JSON.stringify(eventWithTimezone)
       });
 
       if (!response.ok) {

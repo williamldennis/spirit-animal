@@ -90,7 +90,7 @@ export const useAI = () => {
     loadEvents();
   }, [user]);
 
-  const processUserInput = async (input: string): Promise<AIResponse> => {
+  const processUserInput = async (input: string, conversationHistory: Message[] = []): Promise<AIResponse> => {
     setIsProcessing(true);
     setError(null);
 
@@ -99,13 +99,23 @@ export const useAI = () => {
         throw new Error('User must be logged in to use AI features');
       }
 
+      // Log tasks for debugging
+      logger.debug('useAI.processUserInput', 'Current tasks context', { 
+        taskCount: tasks.length,
+        tasks: tasks.map(t => ({ 
+          title: t.title, 
+          completed: t.completed 
+        }))
+      });
+
       const response = await aiService.processUserInput(input, {
         tasks,
         recentMessages: messages,
         allChats,
         contacts,
         events,
-        userId: user.uid
+        userId: user.uid,
+        conversationHistory
       });
 
       // Handle AI actions

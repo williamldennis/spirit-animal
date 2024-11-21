@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -15,13 +15,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeTextInput } from '../../../shared/components/SafeTextInput';
 import { Feather } from '@expo/vector-icons';
 
+interface Message {
+  role: 'user' | 'assistant' | 'confirmation' | 'system';
+  content: string;
+  timestamp: Date;
+}
+
 export const AIAssistant = () => {
   const [input, setInput] = useState('');
+  const [conversation, setConversation] = useState<Message[]>([]);
   const { processUserInput, isProcessing, error } = useAI();
-  const [conversation, setConversation] = useState<Array<{
-    role: 'user' | 'assistant' | 'confirmation';
-    content: string;
-  }>>([]);
   const insets = useSafeAreaInsets();
 
   const handleSend = async () => {
@@ -30,21 +33,33 @@ export const AIAssistant = () => {
     const userMessage = input;
     setInput('');
     
-    setConversation(prev => [...prev, { role: 'user', content: userMessage }]);
+    const newUserMessage: Message = {
+      role: 'user',
+      content: userMessage,
+      timestamp: new Date()
+    };
+    
+    setConversation(prev => [...prev, newUserMessage]);
 
     try {
-      const response = await processUserInput(userMessage);
+      const aiConversation = conversation.filter(msg => msg.role !== 'confirmation');
+      const response = await processUserInput(userMessage, aiConversation);
       
-      setConversation(prev => [...prev, { 
-        role: 'assistant', 
-        content: response.text 
-      }]);
+      const newAIMessage: Message = {
+        role: 'assistant',
+        content: response.text,
+        timestamp: new Date()
+      };
+      
+      setConversation(prev => [...prev, newAIMessage]);
 
       if (response.confirmation) {
-        setConversation(prev => [...prev, {
+        const confirmationMessage: Message = {
           role: 'confirmation',
-          content: response.confirmation || ''
-        }]);
+          content: response.confirmation,
+          timestamp: new Date()
+        };
+        setConversation(prev => [...prev, confirmationMessage]);
       }
     } catch (err) {
       console.error('Error processing message:', err);
@@ -65,6 +80,7 @@ export const AIAssistant = () => {
               styles.message,
               item.role === 'user' ? styles.userMessage : 
               item.role === 'confirmation' ? styles.confirmationMessage :
+              item.role === 'system' ? styles.systemMessage :
               styles.aiMessage
             ]}
           >
@@ -72,6 +88,7 @@ export const AIAssistant = () => {
               styles.messageText,
               item.role === 'user' ? styles.userMessageText : 
               item.role === 'confirmation' ? styles.confirmationMessageText :
+              item.role === 'system' ? styles.systemMessageText :
               styles.aiMessageText
             ]}>
               {item.content}
@@ -204,6 +221,16 @@ const styles = StyleSheet.create({
   },
   confirmationMessageText: {
     color: '#059669',
+    fontStyle: 'italic',
+  },
+  systemMessage: {
+    backgroundColor: '#FEF3C7',
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  systemMessageText: {
+    color: '#A16207',
     fontStyle: 'italic',
   },
 }); 
