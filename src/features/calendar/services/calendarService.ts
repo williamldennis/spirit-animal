@@ -6,12 +6,16 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { addDays } from 'date-fns';
 
-interface CalendarEventResponse {
+export interface CalendarEventResponse {
   id: string;
   summary: string;
   start: {
     dateTime: string;
   };
+  end: {
+    dateTime: string;
+  };
+  description?: string;
 }
 
 type GoogleAuthResponse = {
