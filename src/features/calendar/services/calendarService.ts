@@ -311,6 +311,52 @@ class CalendarService {
   getGoogleAuthStatus(): boolean {
     return !!this.googleAuth;
   }
+
+  async createEvent(userId: string, eventData: Partial<CalendarEventResponse>) {
+    try {
+      logger.debug('CalendarService.createEvent', 'Creating new event', { userId });
+      
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      const tokens = userDoc.data()?.calendarTokens;
+
+      if (!tokens?.accessToken) {
+        logger.error('CalendarService.createEvent', 'No access token found');
+        throw new Error('Calendar not connected');
+      }
+
+      const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(eventData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        logger.error('CalendarService.createEvent', 'Failed to create event', { 
+          status: response.status,
+          error: errorData 
+        });
+        throw new Error('Failed to create event');
+      }
+
+      const data = await response.json();
+      logger.debug('CalendarService.createEvent', 'Event created successfully', {
+        eventId: data.id,
+        summary: data.summary
+      });
+      
+      return data;
+    } catch (error) {
+      logger.error('CalendarService.createEvent', 'Failed to create event', { error });
+      throw error;
+    }
+  }
 }
 
 export const calendarService = new CalendarService();
