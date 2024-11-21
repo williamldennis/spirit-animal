@@ -5,25 +5,15 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   ActivityIndicator,
-  FlatList,
   Alert
 } from 'react-native';
 import { calendarService } from '../services/calendarService';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { logger } from '../../../utils/logger';
-
-// Add type for events
-interface CalendarEvent {
-  id: string;
-  summary: string;
-  start: {
-    dateTime: string;
-  };
-}
+import WeekCalendarView from '../components/WeekCalendarView';
 
 export default function CalendarScreen() {
   const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const user = useAuthStore(state => state.user);
 
@@ -36,10 +26,8 @@ export default function CalendarScreen() {
     
     try {
       const connected = await calendarService.isCalendarConnected(user.uid);
+      logger.debug('CalendarScreen', 'Calendar connection status', { connected });
       setIsConnected(connected);
-      if (connected) {
-        fetchEvents();
-      }
     } catch (error) {
       logger.error('CalendarScreen', 'Failed to check calendar connection', { error });
     } finally {
@@ -52,42 +40,23 @@ export default function CalendarScreen() {
 
     try {
       setLoading(true);
-      logger.debug('CalendarScreen.handleConnectCalendar', 'Starting connection attempt', {
-        userId: user.uid,
-        hasAuth: calendarService.getGoogleAuthStatus()
-      });
-
-      const success = await calendarService.connectGoogleCalendar(user.uid);
+      logger.debug('CalendarScreen.handleConnectCalendar', 'Starting connection');
       
-      logger.debug('CalendarScreen.handleConnectCalendar', 'Connection result', {
-        success
-      });
-
+      const success = await calendarService.connectGoogleCalendar(user.uid);
+      logger.debug('CalendarScreen.handleConnectCalendar', 'Connection result', { success });
+      
       if (success) {
+        logger.debug('CalendarScreen.handleConnectCalendar', 'Connection successful, updating state');
         setIsConnected(true);
-        fetchEvents();
+      } else {
+        logger.warn('CalendarScreen.handleConnectCalendar', 'Connection unsuccessful');
+        setIsConnected(false);
+        Alert.alert('Error', 'Failed to connect Google Calendar. Please try again.');
       }
     } catch (error) {
-      logger.error('CalendarScreen.handleConnectCalendar', 'Failed to connect', { 
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('CalendarScreen', 'Failed to connect calendar', { error });
+      setIsConnected(false);
       Alert.alert('Error', 'Failed to connect Google Calendar. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchEvents = async () => {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      const upcomingEvents = await calendarService.fetchUpcomingEvents(user.uid);
-      setEvents(upcomingEvents);
-    } catch (error) {
-      logger.error('CalendarScreen', 'Failed to fetch events', { error });
-      Alert.alert('Error', 'Failed to fetch calendar events. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -120,34 +89,10 @@ export default function CalendarScreen() {
     );
   }
 
-  return (
-    <View style={styles.container}>
-      <FlatList
-        data={events}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.eventItem}>
-            <Text style={styles.eventTitle}>{item.summary}</Text>
-            <Text style={styles.eventTime}>
-              {new Date(item.start.dateTime).toLocaleString()}
-            </Text>
-          </View>
-        )}
-        ListEmptyComponent={
-          <View style={styles.centerContainer}>
-            <Text style={styles.emptyText}>No upcoming events</Text>
-          </View>
-        }
-      />
-    </View>
-  );
+  return <WeekCalendarView />;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
   centerContainer: {
     flex: 1,
     alignItems: 'center',
@@ -176,25 +121,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
-  },
-  eventItem: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  eventTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  eventTime: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6B7280',
   },
 }); 
