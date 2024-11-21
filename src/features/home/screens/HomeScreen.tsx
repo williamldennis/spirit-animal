@@ -9,6 +9,7 @@ import CalendarScreen from '../../calendar/screens/CalendarScreen';
 import TaskList from '../../tasks/components/TaskList';
 import AddTaskModal from '../../tasks/components/AddTaskModal';
 import { AIBottomSheet } from '../../ai/components/AIBottomSheet';
+import AddEventModal from '../../calendar/components/AddEventModal';
 
 type TabType = {
   id: string;
@@ -26,6 +27,7 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState('chat');
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAI, setShowAI] = useState(false);
+  const [showAddEvent, setShowAddEvent] = useState(false);
   const navigation = useNavigation();
 
   const renderHeaderRight = () => {
@@ -40,6 +42,25 @@ export default function HomeScreen() {
             }}
           >
             <Feather name="edit" size={24} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton}>
+            <Feather name="more-vertical" size={24} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    if (activeTab === 'calendar') {
+      return (
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => setShowAddEvent(true)}
+          >
+            <Feather name="plus" size={24} color="#2563EB" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton}>
+            <Feather name="search" size={24} color="#6B7280" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton}>
             <Feather name="more-vertical" size={24} color="#6B7280" />
@@ -64,16 +85,7 @@ export default function HomeScreen() {
       );
     }
     
-    return (
-      <View style={styles.headerRight}>
-        <TouchableOpacity style={styles.iconButton}>
-          <Feather name="search" size={24} color="#6B7280" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton}>
-          <Feather name="more-vertical" size={24} color="#6B7280" />
-        </TouchableOpacity>
-      </View>
-    );
+    return null;
   };
 
   const renderContent = () => {
@@ -150,6 +162,11 @@ export default function HomeScreen() {
       <AIBottomSheet 
         visible={showAI} 
         onClose={() => setShowAI(false)} 
+      />
+
+      <AddEventModal 
+        visible={showAddEvent} 
+        onClose={() => setShowAddEvent(false)} 
       />
     </SafeAreaView>
   );

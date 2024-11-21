@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { View, StyleSheet } from 'react-native';
 import { calendarService } from '../services/calendarService';
 import { WeekCalendarView } from '../components/WeekCalendarView';
 import { useAuthStore } from '../../../features/auth/stores/authStore';
@@ -29,15 +28,6 @@ export const CalendarScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => setShowAddEvent(true)}
-        >
-          <Feather name="plus" size={24} color="#2563EB" />
-        </TouchableOpacity>
-      </View>
-      
       <WeekCalendarView events={events} />
       
       <AddEventModal 
@@ -52,16 +42,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  addButton: {
-    padding: 8,
   },
 });
 
