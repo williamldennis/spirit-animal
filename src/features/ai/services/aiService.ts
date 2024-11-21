@@ -7,6 +7,8 @@ import { format } from 'date-fns';
 import { Contact } from '../../../types/contact';
 import { chatService } from '../../chat/services/chatService';
 import { userService } from '../../auth/services/userService';
+import { CalendarEventResponse } from '../../calendar/services/calendarService';
+import { isSameDay, isAfter } from 'date-fns';
 
 export class AIService {
   private openai: OpenAI;
@@ -27,6 +29,7 @@ export class AIService {
       userId: string;
       currentChatId?: string;
       currentContact?: { name: string; email: string; };
+      events?: CalendarEventResponse[];
     }
   ): Promise<AIResponse> {
     try {
@@ -37,6 +40,7 @@ export class AIService {
       const tasksContext = this.formatTasksContext(context.tasks || []);
       const messagesContext = this.formatAllMessagesContext(context.allChats || {}, context.currentChatId);
       const contactsContext = this.formatContactsContext(context.contacts || [], context.currentContact);
+      const eventsContext = this.formatEventsContext(context.events || []);
 
       const response = await this.openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -47,6 +51,7 @@ export class AIService {
               tasksContext,
               messagesContext,
               contactsContext,
+              eventsContext,
               currentContact: context.currentContact
             })
           },
@@ -80,6 +85,32 @@ export class AIService {
                 chatId: { type: "string" }
               },
               required: ["content", "chatId"]
+            }
+          },
+          {
+            name: "create_event",
+            description: "Create a new calendar event",
+            parameters: {
+              type: "object",
+              properties: {
+                summary: { type: "string" },
+                description: { type: "string" },
+                start: { 
+                  type: "object",
+                  properties: {
+                    dateTime: { type: "string", format: "date-time" }
+                  },
+                  required: ["dateTime"]
+                },
+                end: {
+                  type: "object",
+                  properties: {
+                    dateTime: { type: "string", format: "date-time" }
+                  },
+                  required: ["dateTime"]
+                }
+              },
+              required: ["summary", "start", "end"]
             }
           }
         ]
@@ -219,10 +250,36 @@ ${contacts.map(contact => `
     return context;
   }
 
+  private formatEventsContext(events: CalendarEventResponse[]): string {
+    if (events.length === 0) return "No upcoming events.";
+
+    const today = new Date();
+    const todayEvents = events.filter(event => 
+      isSameDay(new Date(event.start.dateTime), today)
+    );
+    
+    const upcomingEvents = events.filter(event => 
+      isAfter(new Date(event.start.dateTime), today)
+    ).slice(0, 5);
+
+    return `
+Today's Events:
+${todayEvents.map(event => `
+- ${format(new Date(event.start.dateTime), 'h:mm a')}: ${event.summary}
+`).join('')}
+
+Upcoming Events:
+${upcomingEvents.map(event => `
+- ${format(new Date(event.start.dateTime), 'EEE, MMM d h:mm a')}: ${event.summary}
+`).join('')}
+    `;
+  }
+
   private getSystemPrompt(context: { 
     tasksContext: string; 
     messagesContext: string;
     contactsContext: string;
+    eventsContext: string;
     currentContact?: { name: string; email: string; };
   }): string {
     return `You are an AI assistant in a productivity app. Here is your current context:
@@ -233,19 +290,23 @@ ${context.messagesContext}
 
 ${context.tasksContext}
 
+${context.eventsContext}
+
 You can:
-1. Answer questions about tasks and messages
+1. Answer questions about tasks, messages, and calendar events
 2. Create new tasks using create_task
 3. Send messages using send_message
+4. Create calendar events using create_event
 
-When sending messages:
-${context.currentContact 
-  ? `- You are currently chatting with ${context.currentContact.name} (${context.currentContact.email})`
-  : '- First verify the recipient\'s email is in the available contacts'}
-- Keep messages professional and concise
-- Include relevant task or calendar information if applicable
+When creating calendar events:
+- Use the create_event function
+- Ensure start and end times are provided
+- Include relevant details in the description
 
-If a contact is not found, inform the user that you need a valid contact email address.
+When summarizing the day:
+- Include tasks, messages, and calendar events
+- Highlight any conflicts or overlapping events
+- Suggest task prioritization based on calendar availability
 
 Keep responses concise and action-oriented.`;
   }

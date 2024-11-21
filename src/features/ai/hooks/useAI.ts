@@ -10,6 +10,8 @@ import { logger } from '../../../utils/logger';
 import * as Contacts from 'expo-contacts';
 import { Contact } from '../../../types/contact';
 import { Message } from '../../chat/types';
+import { calendarService } from '../../calendar/services/calendarService';
+import type { CalendarEventResponse } from '../../calendar/services/calendarService';
 
 const aiService = new AIService();
 
@@ -18,6 +20,7 @@ export const useAI = () => {
   const [error, setError] = useState<Error | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [allChats, setAllChats] = useState<{ [chatId: string]: Message[] }>({});
+  const [events, setEvents] = useState<CalendarEventResponse[]>([]);
   
   const { tasks } = useTaskStore();
   const { messages } = useChatStore();
@@ -71,6 +74,22 @@ export const useAI = () => {
     loadAllChats();
   }, [user]);
 
+  // Add calendar events loading
+  useEffect(() => {
+    if (!user) return;
+
+    const loadEvents = async () => {
+      try {
+        const calendarEvents = await calendarService.fetchUpcomingEvents(user.uid);
+        setEvents(calendarEvents);
+      } catch (error) {
+        logger.error('useAI.loadEvents', 'Failed to load calendar events', { error });
+      }
+    };
+
+    loadEvents();
+  }, [user]);
+
   const processUserInput = async (input: string): Promise<AIResponse> => {
     setIsProcessing(true);
     setError(null);
@@ -85,6 +104,7 @@ export const useAI = () => {
         recentMessages: messages,
         allChats,
         contacts,
+        events,
         userId: user.uid
       });
 
@@ -108,6 +128,15 @@ export const useAI = () => {
             const { chatId, content } = response.action.parameters;
             await chatService.sendMessage(chatId, user.uid, content);
             break;
+          case 'create_event':
+            await calendarService.createEvent(user.uid, response.action.parameters);
+            logger.info('useAI', 'Event created successfully', { 
+              summary: response.action.parameters.summary 
+            });
+            // Refresh events
+            const updatedEvents = await calendarService.fetchUpcomingEvents(user.uid);
+            setEvents(updatedEvents);
+            break;
         }
       }
 
@@ -128,7 +157,8 @@ export const useAI = () => {
     hasContext: {
       contacts: contacts.length > 0,
       chats: Object.keys(allChats).length > 0,
-      tasks: tasks.length > 0
+      tasks: tasks.length > 0,
+      events: events.length > 0
     }
   };
 }; 
