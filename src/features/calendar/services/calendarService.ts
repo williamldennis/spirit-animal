@@ -216,15 +216,10 @@ class CalendarService {
       const userDoc = await getDoc(userRef);
       const tokens = userDoc.data()?.calendarTokens;
 
-      logger.debug('CalendarService.fetchUpcomingEvents', 'Retrieved tokens', {
-        hasTokens: !!tokens,
-        hasAccessToken: !!tokens?.accessToken,
-        expiresAt: tokens?.expiresAt?.toDate?.() || new Date(tokens.expiresAt)
-      });
-
+      // Check if calendar is connected
       if (!tokens?.accessToken) {
-        logger.error('CalendarService.fetchUpcomingEvents', 'No access token found');
-        throw new Error('No access token available');
+        logger.debug('CalendarService.fetchUpcomingEvents', 'Calendar not connected');
+        return []; // Return empty array if calendar is not connected
       }
 
       // Handle Firestore Timestamp
@@ -244,7 +239,7 @@ class CalendarService {
           calendarTokens: null,
           calendarConnected: false,
         }, { merge: true });
-        throw new Error('Calendar token expired');
+        return []; // Return empty array if token is expired
       }
 
       const sevenDaysFromNow = addDays(now, 7);
@@ -304,7 +299,7 @@ class CalendarService {
         error,
         message: error instanceof Error ? error.message : 'Unknown error'
       });
-      throw error;
+      return []; // Return empty array on error
     }
   }
 

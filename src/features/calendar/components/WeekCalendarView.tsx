@@ -8,7 +8,7 @@ interface WeekCalendarViewProps {
   currentDate?: Date;
 }
 
-export const WeekCalendarView: React.FC<WeekCalendarViewProps> = ({ 
+const WeekCalendarView: React.FC<WeekCalendarViewProps> = ({ 
   events, 
   currentDate = new Date() 
 }) => {
