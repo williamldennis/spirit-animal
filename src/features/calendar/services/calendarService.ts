@@ -9,13 +9,21 @@ import { addDays } from 'date-fns';
 export interface CalendarEventResponse {
   id: string;
   summary: string;
+  description?: string;
+  location?: string;
   start: {
     dateTime: string;
+    timeZone?: string;
   };
   end: {
     dateTime: string;
+    timeZone?: string;
   };
-  description?: string;
+  attendees?: Array<{
+    email: string;
+    responseStatus?: 'needsAction' | 'declined' | 'tentative' | 'accepted';
+    self?: boolean;
+  }>;
 }
 
 type GoogleAuthResponse = {
@@ -327,12 +335,16 @@ class CalendarService {
         ...eventData,
         start: {
           ...eventData.start,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone // Get user's timezone
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
         end: {
           ...eventData.end,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        }
+        },
+        guestsCanModify: false,
+        guestsCanInviteOthers: false,
+        guestsCanSeeOtherGuests: true,
+        sendUpdates: 'all'
       };
 
       const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';

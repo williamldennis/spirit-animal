@@ -15,10 +15,16 @@ import { format } from 'date-fns';
 import { useAuthStore } from '../../../features/auth/stores/authStore';
 import { calendarService } from '../services/calendarService';
 import { logger } from '../../../utils/logger';
+import { Feather } from '@expo/vector-icons';
 
 interface AddEventModalProps {
   visible: boolean;
   onClose: () => void;
+}
+
+interface Attendee {
+  email: string;
+  responseStatus?: 'needsAction' | 'declined' | 'tentative' | 'accepted';
 }
 
 export default function AddEventModal({ visible, onClose }: AddEventModalProps) {
@@ -29,8 +35,31 @@ export default function AddEventModal({ visible, onClose }: AddEventModalProps) 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [newAttendee, setNewAttendee] = useState('');
   
   const user = useAuthStore(state => state.user);
+
+  const handleAddAttendee = () => {
+    if (!newAttendee.trim()) return;
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newAttendee)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      return;
+    }
+
+    setAttendees(prev => [...prev, { 
+      email: newAttendee.trim(),
+      responseStatus: 'needsAction'
+    }]);
+    setNewAttendee('');
+  };
+
+  const handleRemoveAttendee = (email: string) => {
+    setAttendees(prev => prev.filter(a => a.email !== email));
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) {
@@ -52,10 +81,13 @@ export default function AddEventModal({ visible, onClose }: AddEventModalProps) 
         description,
         start: {
           dateTime: startDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
         end: {
           dateTime: endDate.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
+        attendees: attendees.length > 0 ? attendees : undefined
       };
 
       await calendarService.createEvent(user.uid, newEvent);
@@ -143,6 +175,41 @@ export default function AddEventModal({ visible, onClose }: AddEventModalProps) 
                 }}
               />
             )}
+
+            <View style={styles.attendeesSection}>
+              <Text style={styles.sectionTitle}>Attendees</Text>
+              <View style={styles.addAttendeeContainer}>
+                <TextInput
+                  style={[styles.input, styles.attendeeInput]}
+                  placeholder="Add attendee email"
+                  value={newAttendee}
+                  onChangeText={setNewAttendee}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!loading}
+                />
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={handleAddAttendee}
+                  disabled={!newAttendee.trim()}
+                >
+                  <Feather name="plus" size={24} color="#2563EB" />
+                </TouchableOpacity>
+              </View>
+
+              {attendees.map((attendee, index) => (
+                <View key={index} style={styles.attendeeItem}>
+                  <Text style={styles.attendeeEmail}>{attendee.email}</Text>
+                  <TouchableOpacity
+                    onPress={() => handleRemoveAttendee(attendee.email)}
+                    style={styles.removeButton}
+                  >
+                    <Feather name="x" size={20} color="#DC2626" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
           </ScrollView>
 
           <View style={styles.buttonContainer}>
@@ -254,5 +321,44 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  attendeesSection: {
+    marginTop: 16,
+  },
+  addAttendeeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  attendeeInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  addButton: {
+    padding: 8,
+  },
+  attendeeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F3F4F6',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  attendeeEmail: {
+    fontSize: 14,
+    color: '#111827',
+    flex: 1,
+  },
+  removeButton: {
+    padding: 4,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginBottom: 8,
   },
 }); 

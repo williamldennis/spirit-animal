@@ -12,6 +12,24 @@ const EventDetailScreen = ({ route, navigation }: Props) => {
   const { event } = route.params;
   const [showEditModal, setShowEditModal] = useState(false);
 
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'accepted': return '#059669'; // green
+      case 'declined': return '#DC2626'; // red
+      case 'tentative': return '#D97706'; // yellow
+      default: return '#6B7280'; // gray
+    }
+  };
+
+  const getStatusText = (status?: string) => {
+    switch (status) {
+      case 'accepted': return 'Going';
+      case 'declined': return 'Not Going';
+      case 'tentative': return 'Maybe';
+      default: return 'Pending';
+    }
+  };
+
   // Configure the navigation header
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -57,11 +75,18 @@ const EventDetailScreen = ({ route, navigation }: Props) => {
           <Text style={styles.sectionTitle}>Attendees</Text>
           {event.attendees.map((attendee, index) => (
             <View key={index} style={styles.attendeeItem}>
-              <Text style={styles.attendeeName}>{attendee.email}</Text>
-              <Text style={styles.attendeeStatus}>
-                {attendee.responseStatus === 'accepted' ? 'Going' : 
-                 attendee.responseStatus === 'declined' ? 'Not Going' : 
-                 attendee.responseStatus === 'tentative' ? 'Maybe' : 'Pending'}
+              <Text style={[
+                styles.attendeeName,
+                attendee.self && styles.selfAttendee
+              ]}>
+                {attendee.email}
+                {attendee.self && ' (You)'}
+              </Text>
+              <Text style={[
+                styles.attendeeStatus,
+                { color: getStatusColor(attendee.responseStatus) }
+              ]}>
+                {getStatusText(attendee.responseStatus)}
               </Text>
             </View>
           ))}
@@ -116,7 +141,10 @@ const styles = StyleSheet.create({
   },
   attendeeStatus: {
     fontSize: 14,
-    color: '#6B7280',
+    fontStyle: 'italic',
+  },
+  selfAttendee: {
+    fontWeight: '500',
   },
 });
 
