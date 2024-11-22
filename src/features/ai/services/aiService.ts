@@ -3,16 +3,27 @@ import { Task } from '../../tasks/types';
 import { Message } from '../../chat/types';
 import { AIResponse, AIAction } from '../types';
 import { ENV } from '../../../config/env';
-import { format } from 'date-fns';
 import { Contact } from '../../../types/contact';
 import { chatService } from '../../chat/services/chatService';
 import { userService } from '../../auth/services/userService';
 import { CalendarEventResponse } from '../../calendar/services/calendarService';
-import { isSameDay, isAfter } from 'date-fns';
+import { 
+  isSameDay, 
+  isAfter, 
+  format, 
+  addDays, 
+  startOfTomorrow, 
+  endOfTomorrow, 
+  parse, 
+  isValid 
+} from 'date-fns';
 import { logger } from '../../../utils/logger';
+import { taskService } from '../../tasks/services/taskService';
+import { Timestamp } from 'firebase/firestore';
 
 export class AIService {
   private openai: OpenAI;
+  private messageContainsTomorrow: boolean = false;
   
   constructor() {
     this.openai = new OpenAI({
@@ -74,10 +85,24 @@ export class AIService {
             parameters: {
               type: "object",
               properties: {
-                title: { type: "string" },
-                description: { type: "string" },
-                dueDate: { type: "string", format: "date-time" },
-                priority: { type: "string", enum: ["low", "medium", "high"] }
+                title: { 
+                  type: "string",
+                  description: "The title of the task"
+                },
+                description: { 
+                  type: "string",
+                  description: "Optional description of the task"
+                },
+                dueDate: { 
+                  type: "string", 
+                  format: "date-time",
+                  description: "When the task is due (ISO string)"
+                },
+                priority: { 
+                  type: "string", 
+                  enum: ["low", "medium", "high"],
+                  description: "Task priority level"
+                }
               },
               required: ["title"]
             }
@@ -146,6 +171,11 @@ export class AIService {
         }
       }
 
+      // Handle task creation
+      if (parsedResponse.action?.type === 'create_task' && context.userId) {
+        await this.handleTaskCreation(context.userId, parsedResponse.action.parameters);
+      }
+
       return parsedResponse;
     } catch (error: any) {
       console.error('AI Processing Error:', {
@@ -184,28 +214,58 @@ export class AIService {
 
     logger.debug('AIService.formatTasksContext', 'Formatting tasks', { 
       taskCount: tasks.length,
-      sampleTasks: tasks.slice(0, 3).map(t => t.title)
+      taskSample: tasks.slice(0, 3).map(t => t.title)
     });
 
     const incompleteTasks = tasks.filter(task => !task.completed);
     const completedTasks = tasks.filter(task => task.completed);
 
-    let context = 'Current Tasks:\n';
+    let context = `You have ${tasks.length} total tasks (${incompleteTasks.length} incomplete, ${completedTasks.length} completed).\n\n`;
+    context += 'Incomplete Tasks:\n';
 
     if (incompleteTasks.length === 0) {
       context += 'No incomplete tasks.\n';
     } else {
-      context += incompleteTasks.map(task => `
-- ${task.title}
-  ${task.description ? `Description: ${task.description}` : ''}
-  ${task.dueDate ? `Due: ${format(new Date(task.dueDate), 'PPP')}` : 'No due date'}
-  Priority: ${task.priority || 'none'}
-`).join('');
+      context += incompleteTasks.map(task => {
+        let taskStr = `- ${task.title}\n`;
+        
+        if (task.description) {
+          taskStr += `  Description: ${task.description}\n`;
+        }
+        
+        if (task.dueDate) {
+          try {
+            // Handle Firestore Timestamp
+            const date = task.dueDate.toDate();
+            taskStr += `  Due: ${format(date, 'PPP')}\n`;
+          } catch (error) {
+            logger.error('AIService.formatTasksContext', 'Failed to format due date', {
+              taskId: task.id,
+              dueDate: task.dueDate,
+              error
+            });
+          }
+        } else {
+          taskStr += '  No due date\n';
+        }
+        
+        taskStr += `  Priority: ${task.priority || 'none'}\n`;
+        taskStr += '  Status: Not completed\n';
+        
+        return taskStr;
+      }).join('\n');
     }
 
     if (completedTasks.length > 0) {
       context += '\nRecently Completed Tasks:\n';
-      context += completedTasks.slice(0, 5).map(task => `- ${task.title} (Completed)`).join('\n');
+      context += completedTasks.slice(0, 5).map(task => {
+        let taskStr = `- ${task.title}\n`;
+        if (task.description) {
+          taskStr += `  Description: ${task.description}\n`;
+        }
+        taskStr += '  Completed\n';
+        return taskStr;
+      }).join('\n');
     }
 
     return context;
@@ -303,7 +363,10 @@ ${upcomingEvents.map(event => `
     eventsContext: string;
     currentContact?: { name: string; email: string; };
   }): string {
+    const now = new Date();
     const prompt = `You are an AI assistant in a productivity app. Here is your current context:
+
+Current date and time: ${format(now, 'PPpp')}
 
 Tasks:
 ${context.tasksContext}
@@ -323,22 +386,18 @@ You can:
 3. Send messages using send_message
 4. Create calendar events using create_event
 
-When summarizing tasks:
-- List incomplete tasks first
-- Include due dates and priorities if available
-- Mention the total number of tasks
-- Suggest task prioritization if asked
+When creating calendar events:
+- Use the create_event function
+- Always use absolute dates and times
+- When user mentions "tomorrow", use the next day from current date
+- When user mentions "next week", add 7 days to current date
+- Include timezone information
+- Ensure start time is before end time
+- Default to 1 hour duration if not specified
 
 Keep responses concise and action-oriented.
 Maintain conversation context and refer to previous messages when appropriate.
 If a user asks about "that" or "it", look at previous messages for context.`;
-
-    logger.debug('AIService.getSystemPrompt', 'Generated prompt with context', {
-      hasTaskContext: context.tasksContext !== "No tasks available.",
-      hasEventContext: context.eventsContext !== "No upcoming events.",
-      hasMessageContext: context.messagesContext !== "No messages available.",
-      hasContactContext: context.contactsContext !== "No contacts available."
-    });
 
     return prompt;
   }
@@ -365,49 +424,152 @@ If a user asks about "that" or "it", look at previous messages for context.`;
     const functionCall = message.function_call;
 
     if (functionCall) {
-      const parameters = JSON.parse(functionCall.arguments);
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      try {
+        const parameters = JSON.parse(functionCall.arguments);
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-      // Add timezone to event parameters if it's a create_event action
-      if (functionCall.name === 'create_event') {
-        parameters.start = {
-          ...parameters.start,
-          timeZone: timezone
+        // Set the flag based on message content
+        this.messageContainsTomorrow = message.content?.toLowerCase().includes('tomorrow') || false;
+
+        // Add timezone to event parameters if it's a create_event action
+        if (functionCall.name === 'create_event') {
+          // Handle relative dates for events
+          const now = new Date();
+          let startDateTime = new Date(parameters.start.dateTime);
+          let endDateTime = new Date(parameters.end.dateTime);
+
+          // If the date is in the past, assume it means next occurrence
+          if (startDateTime < now) {
+            // If it's for "tomorrow" but date is wrong
+            if (message.content.toLowerCase().includes('tomorrow')) {
+              const tomorrow = startOfTomorrow();
+              startDateTime = new Date(
+                tomorrow.getFullYear(),
+                tomorrow.getMonth(),
+                tomorrow.getDate(),
+                startDateTime.getHours(),
+                startDateTime.getMinutes()
+              );
+              
+              // Adjust end time to maintain duration
+              const duration = endDateTime.getTime() - new Date(parameters.start.dateTime).getTime();
+              endDateTime = new Date(startDateTime.getTime() + duration);
+            }
+          }
+
+          parameters.start = {
+            dateTime: startDateTime.toISOString(),
+            timeZone: timezone
+          };
+          parameters.end = {
+            dateTime: endDateTime.toISOString(),
+            timeZone: timezone
+          };
+
+          logger.debug('AIService.parseAIResponse', 'Adjusted event dates', {
+            originalStart: parameters.start.dateTime,
+            originalEnd: parameters.end.dateTime,
+            adjustedStart: startDateTime.toISOString(),
+            adjustedEnd: endDateTime.toISOString(),
+            messageContent: message.content
+          });
+        }
+
+        // Add special handling for create_task
+        if (functionCall.name === 'create_task') {
+          logger.debug('AIService.parseAIResponse', 'Creating task with parameters', {
+            parameters,
+            messageContent: message.content,
+            containsTomorrow: this.messageContainsTomorrow
+          });
+        }
+
+        const action: AIAction = {
+          type: functionCall.name as 'create_task' | 'send_message' | 'create_event',
+          parameters: this.formatActionParameters(functionCall.name, parameters)
         };
-        parameters.end = {
-          ...parameters.end,
-          timeZone: timezone
+
+        logger.debug('AIService.parseAIResponse', 'Parsed action', {
+          type: action.type,
+          parameters: action.parameters
+        });
+
+        // Reset the flag after use
+        this.messageContainsTomorrow = false;
+
+        return {
+          text: message.content || '',
+          action,
+          confirmation: this.getActionConfirmation(action)
         };
+      } catch (error) {
+        logger.error('AIService.parseAIResponse', 'Failed to parse response', {
+          error,
+          functionCall,
+          messageContent: message.content
+        });
+        throw error;
       }
-
-      const action: AIAction = {
-        type: functionCall.name as 'create_task' | 'send_message' | 'create_event',
-        parameters: this.formatActionParameters(functionCall.name, parameters)
-      };
-
-      return {
-        text: message.content,
-        action,
-        confirmation: this.getActionConfirmation(action)
-      };
     }
 
     return {
-      text: message.content
+      text: message.content || ''
     };
   }
 
   private formatActionParameters(actionType: string, parameters: any) {
     switch (actionType) {
       case 'create_task':
+        // Convert the date string to a Firestore Timestamp
+        let dueDate = undefined;
+        
+        if (parameters.dueDate) {
+          dueDate = new Date(parameters.dueDate);
+        } else if (this.messageContainsTomorrow) { // Add this property to track "tomorrow" mentions
+          dueDate = startOfTomorrow();
+        }
+
         return {
           title: parameters.title,
           description: parameters.description || '',
-          dueDate: parameters.dueDate ? new Date(parameters.dueDate) : undefined,
+          dueDate: dueDate,
           priority: parameters.priority || 'medium',
+        };
+      case 'create_event':
+        return {
+          summary: parameters.summary,
+          description: parameters.description,
+          start: parameters.start,
+          end: parameters.end,
         };
       default:
         return parameters;
+    }
+  }
+
+  private async handleTaskCreation(userId: string, parameters: any): Promise<void> {
+    try {
+      // Convert date to Firestore Timestamp if it exists
+      const dueDate = parameters.dueDate ? 
+        Timestamp.fromDate(new Date(parameters.dueDate)) : 
+        this.messageContainsTomorrow ? 
+          Timestamp.fromDate(startOfTomorrow()) : 
+          undefined;
+
+      const taskData = {
+        title: parameters.title,
+        description: parameters.description || '',
+        dueDate,
+        priority: parameters.priority || 'medium',
+      };
+
+      await taskService.createTask(userId, taskData);
+      logger.debug('AIService.handleTaskCreation', 'Task created successfully', {
+        taskData
+      });
+    } catch (error) {
+      logger.error('AIService.handleTaskCreation', 'Failed to create task', { error });
+      throw new Error('Failed to create task');
     }
   }
 } 

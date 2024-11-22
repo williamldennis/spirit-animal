@@ -1,7 +1,13 @@
 import { Task } from '../../tasks/types';
-import { Message } from '../../chat/types';
+import { Message as ChatMessage } from '../../chat/types';
 import { Contact } from '../../../types/contact';
 import { CalendarEventResponse } from '../../calendar/services/calendarService';
+
+export interface AIMessage {
+  role: 'user' | 'assistant' | 'confirmation' | 'system';
+  content: string;
+  timestamp: Date;
+}
 
 export interface AIAction {
   type: 'create_task' | 'send_message' | 'create_event' | 'update_event';
@@ -16,14 +22,14 @@ export interface AIResponse {
 
 export interface AIContext {
   tasks?: Task[];
-  recentMessages?: Message[];
-  allChats?: { [chatId: string]: Message[] };
+  recentMessages?: ChatMessage[];
+  allChats?: { [chatId: string]: ChatMessage[] };
   contacts?: Contact[];
   events?: CalendarEventResponse[];
   userId: string;
   currentChatId?: string;
   currentContact?: { name: string; email: string; };
-  conversationHistory?: Message[];
+  conversationHistory?: AIMessage[];
 }
 
 export interface AIState {

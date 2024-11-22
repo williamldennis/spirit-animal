@@ -3,7 +3,7 @@ import { useTaskStore } from '../../tasks/stores/taskStore';
 import { useChatStore } from '../../chat/stores/chatStore';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { AIService } from '../services/aiService';
-import { AIResponse } from '../types';
+import { AIResponse, AIMessage } from '../types';
 import { chatService } from '../../chat/services/chatService';
 import { taskService } from '../../tasks/services/taskService';
 import { logger } from '../../../utils/logger';
@@ -12,6 +12,7 @@ import { Contact } from '../../../types/contact';
 import { Message } from '../../chat/types';
 import { calendarService } from '../../calendar/services/calendarService';
 import type { CalendarEventResponse } from '../../calendar/services/calendarService';
+import type { Task } from '../../tasks/types';
 
 const aiService = new AIService();
 
@@ -22,9 +23,34 @@ export const useAI = () => {
   const [allChats, setAllChats] = useState<{ [chatId: string]: Message[] }>({});
   const [events, setEvents] = useState<CalendarEventResponse[]>([]);
   
-  const { tasks } = useTaskStore();
+  // Get tasks and loadTasks function from store
+  const tasks = useTaskStore(state => state.tasks);
+  const loadTasks = useTaskStore(state => state.loadTasks);
   const { messages } = useChatStore();
   const { user } = useAuthStore();
+
+  // Load tasks when component mounts or user changes
+  useEffect(() => {
+    if (user?.uid) {
+      loadTasks(user.uid);
+      logger.debug('useAI.loadTasks', 'Loading tasks for user', { 
+        userId: user.uid 
+      });
+    }
+  }, [user?.uid, loadTasks]);
+
+  // Debug log when tasks change
+  useEffect(() => {
+    logger.debug('useAI.tasksUpdate', 'Tasks updated', {
+      taskCount: tasks.length,
+      taskSample: tasks.slice(0, 3).map(t => ({
+        id: t.id,
+        title: t.title,
+        completed: t.completed,
+        dueDate: t.dueDate
+      }))
+    });
+  }, [tasks]);
 
   // Load contacts
   useEffect(() => {
@@ -90,7 +116,7 @@ export const useAI = () => {
     loadEvents();
   }, [user]);
 
-  const processUserInput = async (input: string, conversationHistory: Message[] = []): Promise<AIResponse> => {
+  const processUserInput = async (input: string, conversationHistory: AIMessage[] = []): Promise<AIResponse> => {
     setIsProcessing(true);
     setError(null);
 
@@ -102,14 +128,18 @@ export const useAI = () => {
       // Log tasks for debugging
       logger.debug('useAI.processUserInput', 'Current tasks context', { 
         taskCount: tasks.length,
-        tasks: tasks.map(t => ({ 
-          title: t.title, 
-          completed: t.completed 
+        taskSample: tasks.slice(0, 3).map(t => ({
+          id: t.id,
+          title: t.title,
+          completed: t.completed,
+          dueDate: t.dueDate,
+          description: t.description,
+          priority: t.priority
         }))
       });
 
       const response = await aiService.processUserInput(input, {
-        tasks,
+        tasks, // Pass tasks directly from store
         recentMessages: messages,
         allChats,
         contacts,
@@ -117,38 +147,6 @@ export const useAI = () => {
         userId: user.uid,
         conversationHistory
       });
-
-      // Handle AI actions
-      if (response.action) {
-        logger.info('useAI', 'Handling AI action', { actionType: response.action.type });
-        
-        switch (response.action.type) {
-          case 'create_task':
-            await taskService.createTask(user.uid, {
-              title: response.action.parameters.title,
-              description: response.action.parameters.description,
-              dueDate: response.action.parameters.dueDate ? new Date(response.action.parameters.dueDate) : undefined,
-              completed: false
-            });
-            logger.info('useAI', 'Task created successfully', { 
-              title: response.action.parameters.title 
-            });
-            break;
-          case 'send_message':
-            const { chatId, content } = response.action.parameters;
-            await chatService.sendMessage(chatId, user.uid, content);
-            break;
-          case 'create_event':
-            await calendarService.createEvent(user.uid, response.action.parameters);
-            logger.info('useAI', 'Event created successfully', { 
-              summary: response.action.parameters.summary 
-            });
-            // Refresh events
-            const updatedEvents = await calendarService.fetchUpcomingEvents(user.uid);
-            setEvents(updatedEvents);
-            break;
-        }
-      }
 
       return response;
     } catch (err) {

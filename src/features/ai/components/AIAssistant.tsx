@@ -14,16 +14,11 @@ import { useAI } from '../hooks/useAI';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeTextInput } from '../../../shared/components/SafeTextInput';
 import { Feather } from '@expo/vector-icons';
-
-interface Message {
-  role: 'user' | 'assistant' | 'confirmation' | 'system';
-  content: string;
-  timestamp: Date;
-}
+import { AIMessage } from '../types';
 
 export const AIAssistant = () => {
   const [input, setInput] = useState('');
-  const [conversation, setConversation] = useState<Message[]>([]);
+  const [conversation, setConversation] = useState<AIMessage[]>([]);
   const { processUserInput, isProcessing, error } = useAI();
   const insets = useSafeAreaInsets();
 
@@ -33,7 +28,7 @@ export const AIAssistant = () => {
     const userMessage = input;
     setInput('');
     
-    const newUserMessage: Message = {
+    const newUserMessage: AIMessage = {
       role: 'user',
       content: userMessage,
       timestamp: new Date()
@@ -42,19 +37,22 @@ export const AIAssistant = () => {
     setConversation(prev => [...prev, newUserMessage]);
 
     try {
-      const aiConversation = conversation.filter(msg => msg.role !== 'confirmation');
+      const aiConversation = conversation.filter(msg => 
+        msg.role === 'user' || msg.role === 'assistant'
+      );
+      
       const response = await processUserInput(userMessage, aiConversation);
       
-      const newAIMessage: Message = {
+      const newAIMessage: AIMessage = {
         role: 'assistant',
-        content: response.text,
+        content: response.text || '',
         timestamp: new Date()
       };
       
       setConversation(prev => [...prev, newAIMessage]);
 
       if (response.confirmation) {
-        const confirmationMessage: Message = {
+        const confirmationMessage: AIMessage = {
           role: 'confirmation',
           content: response.confirmation,
           timestamp: new Date()
@@ -63,6 +61,12 @@ export const AIAssistant = () => {
       }
     } catch (err) {
       console.error('Error processing message:', err);
+      const errorMessage: AIMessage = {
+        role: 'system',
+        content: err instanceof Error ? err.message : 'An error occurred',
+        timestamp: new Date()
+      };
+      setConversation(prev => [...prev, errorMessage]);
     }
   };
 

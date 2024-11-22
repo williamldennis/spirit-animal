@@ -1,104 +1,134 @@
-import { 
-  collection, addDoc, query, where, getDocs, 
-  orderBy, onSnapshot, Timestamp, doc, updateDoc, deleteDoc 
-} from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { logger } from '../../../utils/logger';
-import { startOfDay, endOfDay, addDays, isToday, isTomorrow } from 'date-fns';
-
-export type Task = {
-  id: string;
-  title: string;
-  description?: string;
-  completed: boolean;
-  dueDate?: Date;
-  createdAt: Date;
-  userId: string;
-};
+import type { Task } from '../types';
 
 class TaskService {
-  async createTask(userId: string, task: Omit<Task, 'id' | 'createdAt' | 'userId'>) {
+  async getTasks(userId: string): Promise<Task[]> {
     try {
-      logger.info('TaskService.createTask', 'Creating task', { userId });
-      const tasksRef = collection(db, 'tasks');
-      const taskDoc = await addDoc(tasksRef, {
-        ...task,
-        userId,
-        createdAt: Timestamp.now(),
-        completed: false,
-        dueDate: task.dueDate ? Timestamp.fromDate(task.dueDate) : null,
-      });
+      logger.debug('TaskService.getTasks', 'Fetching tasks', { userId });
       
-      logger.info('TaskService.createTask', 'Task created', { taskId: taskDoc.id });
-      return taskDoc.id;
+      const tasksRef = collection(db, 'tasks');
+      const q = query(
+        tasksRef,
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const tasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Task[];
+
+      logger.debug('TaskService.getTasks', 'Tasks fetched', { 
+        taskCount: tasks.length,
+        sampleTasks: tasks.slice(0, 3).map(t => ({
+          id: t.id,
+          title: t.title,
+          completed: t.completed
+        }))
+      });
+
+      return tasks;
+    } catch (error) {
+      logger.error('TaskService.getTasks', 'Failed to fetch tasks', { error });
+      throw error;
+    }
+  }
+
+  async createTask(userId: string, taskData: Partial<Task>): Promise<Task> {
+    try {
+      const tasksRef = collection(db, 'tasks');
+      const newTask = {
+        ...taskData,
+        userId,
+        completed: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const docRef = await addDoc(tasksRef, newTask);
+      return {
+        id: docRef.id,
+        ...newTask
+      } as Task;
     } catch (error) {
       logger.error('TaskService.createTask', 'Failed to create task', { error });
       throw error;
     }
   }
 
-  async toggleTaskComplete(taskId: string, completed: boolean) {
+  async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
     try {
-      logger.info('TaskService.toggleTaskComplete', 'Toggling task completion', { taskId });
       const taskRef = doc(db, 'tasks', taskId);
-      await updateDoc(taskRef, { completed });
+      await updateDoc(taskRef, {
+        ...updates,
+        updatedAt: new Date()
+      });
     } catch (error) {
-      logger.error('TaskService.toggleTaskComplete', 'Failed to toggle task', { error });
+      logger.error('TaskService.updateTask', 'Failed to update task', { error });
       throw error;
     }
   }
 
-  subscribeToDayTasks(userId: string, callback: (tasks: Task[]) => void) {
-    logger.info('TaskService.subscribeToDayTasks', 'Setting up tasks subscription', { userId });
-
-    const tasksRef = collection(db, 'tasks');
-    const q = query(
-      tasksRef,
-      where('userId', '==', userId),
-      orderBy('dueDate', 'asc'),
-      orderBy('createdAt', 'desc')
-    );
-
-    return onSnapshot(q, (snapshot) => {
-      const tasks = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        dueDate: doc.data().dueDate?.toDate(),
-        createdAt: doc.data().createdAt.toDate(),
-      })) as Task[];
-
-      logger.debug('TaskService.subscribeToDayTasks', 'Received tasks update', { 
-        taskCount: tasks.length 
-      });
-      
-      callback(tasks);
-    });
-  }
-
-  async deleteTask(taskId: string) {
+  async deleteTask(taskId: string): Promise<void> {
     try {
-      logger.info('TaskService.deleteTask', 'Deleting task', { taskId });
-      await deleteDoc(doc(db, 'tasks', taskId));
+      const taskRef = doc(db, 'tasks', taskId);
+      await deleteDoc(taskRef);
     } catch (error) {
       logger.error('TaskService.deleteTask', 'Failed to delete task', { error });
       throw error;
     }
   }
 
-  async updateTask(taskId: string, updates: Partial<Omit<Task, 'id' | 'userId'>>) {
+  async toggleTaskComplete(taskId: string, completed: boolean): Promise<void> {
     try {
-      logger.info('TaskService.updateTask', 'Updating task', { taskId });
       const taskRef = doc(db, 'tasks', taskId);
-      
-      const updateData = {
-        ...updates,
-        dueDate: updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null,
-      };
-      
-      await updateDoc(taskRef, updateData);
-      logger.info('TaskService.updateTask', 'Task updated successfully');
+      await updateDoc(taskRef, {
+        completed,
+        updatedAt: new Date()
+      });
     } catch (error) {
-      logger.error('TaskService.updateTask', 'Failed to update task', { error });
+      logger.error('TaskService.toggleTaskComplete', 'Failed to toggle task', { error });
+      throw error;
+    }
+  }
+
+  subscribeToDayTasks(userId: string, callback: (tasks: Task[]) => void): () => void {
+    try {
+      logger.debug('TaskService.subscribeToDayTasks', 'Setting up subscription', { userId });
+      
+      const tasksRef = collection(db, 'tasks');
+      const q = query(
+        tasksRef,
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const tasks = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Task[];
+
+        logger.debug('TaskService.subscribeToDayTasks', 'Tasks updated', { 
+          taskCount: tasks.length,
+          sampleTasks: tasks.slice(0, 3).map(t => ({
+            id: t.id,
+            title: t.title,
+            completed: t.completed
+          }))
+        });
+
+        callback(tasks);
+      }, (error) => {
+        logger.error('TaskService.subscribeToDayTasks', 'Subscription error', { error });
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      logger.error('TaskService.subscribeToDayTasks', 'Failed to setup subscription', { error });
       throw error;
     }
   }

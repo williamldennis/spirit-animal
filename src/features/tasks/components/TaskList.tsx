@@ -9,11 +9,13 @@ import {
   Alert
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { taskService, Task } from '../services/taskService';
+import { taskService } from '../services/taskService';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { logger } from '../../../utils/logger';
-import { isToday, isTomorrow } from 'date-fns';
+import { isToday, isTomorrow, format } from 'date-fns';
 import EditTaskModal from './EditTaskModal';
+import type { Task } from '../types';
+import type { Timestamp } from 'firebase/firestore';
 
 type TaskSection = {
   title: string;
@@ -27,6 +29,51 @@ export default function TaskList() {
   const user = useAuthStore(state => state.user);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  const formatDueDate = (dueDate: string | Date | Timestamp | undefined) => {
+    if (!dueDate) return '';
+    try {
+      let date: Date;
+      
+      if (typeof dueDate === 'string') {
+        date = new Date(dueDate);
+      } else if (dueDate instanceof Date) {
+        date = dueDate;
+      } else if ('seconds' in dueDate && 'nanoseconds' in dueDate) {
+        // Handle Firestore Timestamp
+        date = new Date(dueDate.seconds * 1000);
+      } else {
+        throw new Error('Invalid date format');
+      }
+
+      return format(date, 'MM/dd/yyyy');
+    } catch (error) {
+      logger.error('TaskList.formatDueDate', 'Failed to format date', { 
+        dueDate, 
+        error,
+        dateType: typeof dueDate,
+        isTimestamp: dueDate && 'seconds' in dueDate
+      });
+      return '';
+    }
+  };
+
+  const getTaskDate = (dueDate: string | Date | Timestamp | undefined): Date | null => {
+    if (!dueDate) return null;
+    try {
+      if (typeof dueDate === 'string') {
+        return new Date(dueDate);
+      } else if (dueDate instanceof Date) {
+        return dueDate;
+      } else if ('seconds' in dueDate && 'nanoseconds' in dueDate) {
+        return new Date(dueDate.seconds * 1000);
+      }
+      return null;
+    } catch (error) {
+      logger.error('TaskList.getTaskDate', 'Failed to parse date', { dueDate, error });
+      return null;
+    }
+  };
+
   useEffect(() => {
     if (!user) return;
 
@@ -35,12 +82,21 @@ export default function TaskList() {
       const incompleteTasks = allTasks.filter(task => !task.completed);
       const completedTasks = allTasks.filter(task => task.completed);
 
-      const todayTasks = incompleteTasks.filter(task => task.dueDate && isToday(task.dueDate));
-      const tomorrowTasks = incompleteTasks.filter(task => task.dueDate && isTomorrow(task.dueDate));
-      const futureTasks = incompleteTasks.filter(task => 
-        !task.dueDate || // Tasks with no due date
-        (task.dueDate && !isToday(task.dueDate) && !isTomorrow(task.dueDate)) // Future dated tasks
-      );
+      const todayTasks = incompleteTasks.filter(task => {
+        const date = getTaskDate(task.dueDate);
+        return date && isToday(date);
+      });
+
+      const tomorrowTasks = incompleteTasks.filter(task => {
+        const date = getTaskDate(task.dueDate);
+        return date && isTomorrow(date);
+      });
+
+      const futureTasks = incompleteTasks.filter(task => {
+        const date = getTaskDate(task.dueDate);
+        return !date || // Tasks with no due date
+          (date && !isToday(date) && !isTomorrow(date)); // Future dated tasks
+      });
 
       const sections: TaskSection[] = [
         {
@@ -146,7 +202,7 @@ export default function TaskList() {
                 </Text>
                 {item.dueDate && (
                   <Text style={styles.taskDueDate}>
-                    {item.dueDate.toLocaleDateString()}
+                    {formatDueDate(item.dueDate)}
                   </Text>
                 )}
               </View>
