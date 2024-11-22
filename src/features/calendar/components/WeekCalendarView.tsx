@@ -6,13 +6,15 @@ import type { CalendarEventResponse } from '../services/calendarService';
 interface WeekCalendarViewProps {
   events: CalendarEventResponse[];
   currentDate?: Date;
+  daysToShow?: number;
 }
 
 const WeekCalendarView: React.FC<WeekCalendarViewProps> = ({ 
   events, 
-  currentDate = new Date() 
+  currentDate = new Date(),
+  daysToShow = 30 // Default to 30 days
 }) => {
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentDate, i));
+  const days = Array.from({ length: daysToShow }, (_, i) => addDays(currentDate, i));
 
   const getEventsForDay = (date: Date) => {
     return events.filter(event => {
@@ -23,9 +25,12 @@ const WeekCalendarView: React.FC<WeekCalendarViewProps> = ({
 
   return (
     <ScrollView style={styles.container}>
-      {weekDays.map((day, index) => (
+      {days.map((day, index) => (
         <View key={index} style={styles.dayContainer}>
-          <Text style={styles.dayHeader}>
+          <Text style={[
+            styles.dayHeader,
+            isSameDay(day, new Date()) && styles.todayHeader
+          ]}>
             {format(day, 'EEE, MMM d')}
           </Text>
           <View style={styles.eventsContainer}>
@@ -76,6 +81,10 @@ const styles = StyleSheet.create({
   eventTitle: {
     fontSize: 14,
     flex: 1,
+  },
+  todayHeader: {
+    color: '#2563EB',
+    fontWeight: '700',
   },
 });
 

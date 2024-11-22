@@ -22,7 +22,7 @@ export const CalendarScreen = () => {
           setIsConnected(connected);
 
           if (connected) {
-            const calendarEvents = await calendarService.fetchUpcomingEvents(user.uid);
+            const calendarEvents = await calendarService.fetchUpcomingEvents(user.uid, 30);
             console.log('Fetched calendar events:', calendarEvents);
             setEvents(calendarEvents);
           }
@@ -69,7 +69,10 @@ export const CalendarScreen = () => {
 
   return (
     <View style={styles.container}>
-      <WeekCalendarView events={events} />
+      <WeekCalendarView 
+        events={events} 
+        daysToShow={30} 
+      />
       
       <AddEventModal 
         visible={showAddEvent} 

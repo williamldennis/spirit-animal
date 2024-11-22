@@ -208,9 +208,12 @@ class CalendarService {
     }
   }
 
-  async fetchUpcomingEvents(userId: string): Promise<CalendarEventResponse[]> {
+  async fetchUpcomingEvents(userId: string, daysToFetch: number = 30): Promise<CalendarEventResponse[]> {
     try {
-      logger.debug('CalendarService.fetchUpcomingEvents', 'Starting fetch', { userId });
+      logger.debug('CalendarService.fetchUpcomingEvents', 'Starting fetch', { 
+        userId,
+        daysToFetch 
+      });
       
       const userRef = doc(db, 'users', userId);
       const userDoc = await getDoc(userRef);
@@ -219,7 +222,7 @@ class CalendarService {
       // Check if calendar is connected
       if (!tokens?.accessToken) {
         logger.debug('CalendarService.fetchUpcomingEvents', 'Calendar not connected');
-        return []; // Return empty array if calendar is not connected
+        return []; 
       }
 
       // Handle Firestore Timestamp
@@ -239,15 +242,20 @@ class CalendarService {
           calendarTokens: null,
           calendarConnected: false,
         }, { merge: true });
-        return []; // Return empty array if token is expired
+        return [];
       }
 
-      const sevenDaysFromNow = addDays(now, 7);
-      const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${now.toISOString()}&timeMax=${sevenDaysFromNow.toISOString()}&orderBy=startTime&singleEvents=true&maxResults=100`;
+      const endDate = addDays(now, daysToFetch);
+      const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${now.toISOString()}&timeMax=${endDate.toISOString()}&orderBy=startTime&singleEvents=true&maxResults=250`;
 
       logger.debug('CalendarService.fetchUpcomingEvents', 'Making API request', {
         url,
-        tokenPrefix: tokens.accessToken.substring(0, 8) + '...'
+        tokenPrefix: tokens.accessToken.substring(0, 8) + '...',
+        dateRange: {
+          start: now.toISOString(),
+          end: endDate.toISOString(),
+          daysToFetch
+        }
       });
 
       const response = await fetch(url, {
