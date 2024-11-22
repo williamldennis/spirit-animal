@@ -20,6 +20,8 @@ export type Chat = {
   createdAt: Date;
 };
 
+export type MessageType = 'text' | 'ai_suggestion' | 'confirmation' | 'calendar_event';
+
 const convertTimestamp = (timestamp: any): Date => {
   if (!timestamp) return new Date();
   if (timestamp.toDate) return timestamp.toDate();
@@ -109,7 +111,7 @@ export class ChatService {
     chatId: string, 
     senderId: string, 
     text: string,
-    type: 'text' | 'ai_suggestion' = 'text'
+    type: MessageType = 'text'
   ) {
     try {
       logger.info('ChatService.sendMessage', 'Sending message', { chatId, senderId, type });

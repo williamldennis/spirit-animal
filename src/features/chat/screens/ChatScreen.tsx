@@ -138,7 +138,7 @@ export default function ChatScreen() {
               chatId, 
               'ai-assistant',
               aiResponse.confirmation,
-              'ai_suggestion'
+              'confirmation'
             );
           }
         }
@@ -269,11 +269,11 @@ export default function ChatScreen() {
     }
   };
 
-  // Update the message rendering to handle AI messages
+  // Update the renderMessage function:
   const renderMessage = ({ item }: { item: Message }) => (
     <TouchableOpacity 
       onLongPress={() => handleMessageLongPress(item)}
-      delayLongPress={500} // Half a second press to trigger
+      delayLongPress={500}
       activeOpacity={0.7}
     >
       <View 
@@ -284,7 +284,7 @@ export default function ChatScreen() {
           styles.receivedMessage
         ]}
       >
-        {item.type === 'ai_suggestion' && (
+        {(item.type === 'ai_suggestion' || item.type === 'confirmation') && (
           <View style={styles.aiHeader}>
             <Text style={styles.aiLabel}>🦊</Text>
           </View>
@@ -292,7 +292,7 @@ export default function ChatScreen() {
         <Text style={[
           styles.messageText,
           item.senderId === user?.uid ? styles.sentMessageText : 
-          item.type === 'ai_suggestion' ? styles.aiMessageText :
+          item.type === 'ai_suggestion' || item.type === 'confirmation' ? styles.aiMessageText :
           styles.receivedMessageText
         ]}>
           {item.text}
@@ -391,7 +391,7 @@ export default function ChatScreen() {
                       chatId, 
                       'ai-assistant',
                       aiResponse.confirmation,
-                      'ai_suggestion'
+                      'confirmation'
                     );
                   }
                 } catch (error) {
@@ -575,5 +575,14 @@ const styles = StyleSheet.create({
   },
   aiButtonDisabled: {
     opacity: 0.5,
+  },
+  confirmationMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  confirmationMessageText: {
+    color: '#047857',
   },
 }); 
