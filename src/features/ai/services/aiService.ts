@@ -63,15 +63,23 @@ export class AIService {
     try {
       const tomorrow = startOfTomorrow();
       const systemPrompt = `You are a helpful AI assistant that creates calendar events and tasks. 
+
 Current date: ${format(new Date(), 'yyyy-MM-dd')}
 Tomorrow's date: ${format(tomorrow, 'yyyy-MM-dd')}
 
-When creating events:
-- Always use ISO 8601 format for dates
-- For "tomorrow", use ${format(tomorrow, 'yyyy-MM-dd')}
-- Include timezone in responses
-- Default duration is 1 hour if not specified
-- Be precise with dates and times
+Guidelines for creating tasks vs events:
+- Use create_task for:
+  • To-do items without specific times (e.g., "take a shower", "buy groceries")
+  • Personal reminders
+  • Simple activities that don't need scheduling
+  • Flexible tasks that can be done anytime
+  
+- Use create_event for:
+  • Scheduled meetings or appointments
+  • Activities with specific start and end times
+  • Calendar-based activities
+  • Activities involving other people/attendees
+  • Time-sensitive commitments
 
 Be concise and direct.`;
 
@@ -89,8 +97,36 @@ Be concise and direct.`;
         ],
         functions: [
           {
+            name: "create_task",
+            description: "Create a task or to-do item that doesn't require specific timing",
+            parameters: {
+              type: "object",
+              properties: {
+                title: {
+                  type: "string",
+                  description: "Title of the task"
+                },
+                description: {
+                  type: "string",
+                  description: "Description of the task (optional)"
+                },
+                dueDate: {
+                  type: "string",
+                  format: "date-time",
+                  description: "Due date for the task (optional)"
+                },
+                priority: {
+                  type: "string",
+                  enum: ["low", "medium", "high"],
+                  description: "Priority level of the task"
+                }
+              },
+              required: ["title"]
+            }
+          },
+          {
             name: "create_event",
-            description: "Create a calendar event",
+            description: "Create a calendar event with specific start and end times",
             parameters: {
               type: "object",
               properties: {
@@ -146,26 +182,33 @@ Be concise and direct.`;
       if (aiMessage.function_call) {
         const functionCall = aiMessage.function_call;
         const parameters = JSON.parse(functionCall.arguments);
+        const userId = useAuthStore.getState().user?.uid;
 
-        // Handle function calls
-        if (functionCall.name === 'create_event') {
-          const userId = useAuthStore.getState().user?.uid;
-          if (userId) {
-            await this.handleEventCreation(userId, parameters);
-          }
+        if (!userId) {
+          throw new Error('User not authenticated');
+        }
 
-          // Create action object for confirmation
+        // Handle different function calls
+        if (functionCall.name === 'create_task') {
+          await this.handleTaskCreation(userId, parameters);
+          const action: AIAction = {
+            type: 'create_task',
+            parameters
+          };
+          return {
+            text: aiMessage.content || 'Creating your task...',
+            confirmation: this.getActionConfirmation(action),
+            action
+          };
+        } else if (functionCall.name === 'create_event') {
+          await this.handleEventCreation(userId, parameters);
           const action: AIAction = {
             type: 'create_event',
             parameters
           };
-
-          // Generate confirmation with event details
-          const confirmation = this.getActionConfirmation(action);
-
           return {
             text: aiMessage.content || 'Creating your event...',
-            confirmation,
+            confirmation: this.getActionConfirmation(action),
             action
           };
         }
@@ -387,12 +430,22 @@ Date: ${format(startDate, 'EEEE, MMMM d, yyyy')}
 Time: ${format(startDate, 'h:mm a')} - ${format(endDate, 'h:mm a')}
 ${action.parameters.description ? `Description: ${action.parameters.description}` : ''}`;
       }
+      case 'create_task': {
+        let confirmation = `I've created the task:
+Title: ${action.parameters.title}`;
+        if (action.parameters.description) {
+          confirmation += `\nDescription: ${action.parameters.description}`;
+        }
+        if (action.parameters.dueDate) {
+          confirmation += `\nDue: ${format(new Date(action.parameters.dueDate), 'PPP')}`;
+        }
+        if (action.parameters.priority) {
+          confirmation += `\nPriority: ${action.parameters.priority}`;
+        }
+        return confirmation;
+      }
       case 'send_message':
         return `I've sent your message: "${action.parameters.content}"`;
-      case 'create_task':
-        return `I've created a task: "${action.parameters.title}"${
-          action.parameters.dueDate ? ` due on ${format(new Date(action.parameters.dueDate), 'PPP')}` : ''
-        }`;
       default:
         return 'Action completed successfully.';
     }
@@ -481,21 +534,29 @@ ${action.parameters.description ? `Description: ${action.parameters.description}
 
   private async handleTaskCreation(userId: string, parameters: any): Promise<void> {
     try {
-      // Convert date to Firestore Timestamp if it exists
-      const dueDate = parameters.dueDate ? 
-        Timestamp.fromDate(new Date(parameters.dueDate)) : 
-        this.messageContainsTomorrow ? 
-          Timestamp.fromDate(startOfTomorrow()) : 
-          undefined;
-
-      const taskData = {
+      // Create task data without dueDate first
+      const taskData: any = {
         title: parameters.title,
         description: parameters.description || '',
-        dueDate,
         priority: parameters.priority || 'medium',
+        completed: false,
+        createdAt: Timestamp.now() // Add createdAt timestamp
       };
 
+      // Only add dueDate if it exists
+      if (parameters.dueDate) {
+        taskData.dueDate = Timestamp.fromDate(new Date(parameters.dueDate));
+      } else if (this.messageContainsTomorrow) {
+        taskData.dueDate = Timestamp.fromDate(startOfTomorrow());
+      }
+      // If no dueDate is specified, we don't include the field at all
+
+      logger.debug('AIService.handleTaskCreation', 'Creating task with data', {
+        taskData
+      });
+
       await taskService.createTask(userId, taskData);
+      
       logger.debug('AIService.handleTaskCreation', 'Task created successfully', {
         taskData
       });
