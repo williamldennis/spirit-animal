@@ -1,5 +1,5 @@
 import * as Google from 'expo-auth-session/providers/google';
-import type { TokenResponse, AuthSessionResult } from 'expo-auth-session';
+import type { TokenResponse } from 'expo-auth-session';
 import Constants from 'expo-constants';
 import { logger } from '../../../utils/logger';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -49,30 +49,24 @@ class CalendarService {
       const [_, response, promptAsync] = this.googleAuth;
       const result = await promptAsync();
       
-      logger.debug('CalendarService.connectGoogleCalendar', 'Raw auth result', {
+      logger.debug('CalendarService.connectGoogleCalendar', 'Auth result', {
         type: result.type,
-        resultAuth: result.authentication ? {
-          hasToken: !!result.authentication.accessToken,
-          expiresIn: result.authentication.expiresIn
-        } : null,
-        responseAuth: response?.authentication ? {
-          hasToken: !!response.authentication.accessToken,
-          expiresIn: response.authentication.expiresIn
-        } : null
+        hasToken: result.type === 'success' && !!response?.authentication?.accessToken,
+        expiresIn: response?.authentication?.expiresIn
       });
 
-      // Check both result and response for the token
-      const authentication = result.authentication || response?.authentication;
+      // Check for token in response
+      if (result.type === 'success' && response?.authentication?.accessToken) {
+        const { accessToken, expiresIn } = response.authentication;
 
-      if (result.type === 'success' && authentication?.accessToken) {
         logger.debug('CalendarService.connectGoogleCalendar', 'Got token', {
-          tokenPrefix: authentication.accessToken.substring(0, 8) + '...',
-          expiresIn: authentication.expiresIn
+          tokenPrefix: accessToken.substring(0, 8) + '...',
+          expiresIn
         });
 
         await this.storeCalendarTokens(userId, {
-          accessToken: authentication.accessToken,
-          expiresAt: new Date(Date.now() + (authentication.expiresIn || 3600) * 1000)
+          accessToken,
+          expiresAt: new Date(Date.now() + (expiresIn || 3600) * 1000)
         });
 
         // Test API connection
@@ -81,7 +75,7 @@ class CalendarService {
 
         const testResponse = await fetch(testUrl, {
           headers: {
-            Authorization: `Bearer ${authentication.accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
           },
         });
@@ -104,10 +98,10 @@ class CalendarService {
         return true;
       }
 
-      // If we get here, we don't have a valid token
       logger.warn('CalendarService.connectGoogleCalendar', 'No valid token found', {
         type: result.type,
-        hasAuth: !!authentication
+        hasResponse: !!response,
+        hasAuth: !!response?.authentication
       });
       return false;
 
