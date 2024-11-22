@@ -36,4 +36,9 @@ export interface AIState {
   isProcessing: boolean;
   error: Error | null;
   lastResponse?: AIResponse;
+}
+
+export interface MessageContext {
+  role: "user" | "assistant";
+  content: string;
 } 

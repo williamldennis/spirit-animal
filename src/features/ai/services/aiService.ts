@@ -6,7 +6,7 @@ import { ENV } from '../../../config/env';
 import { Contact } from '../../../types/contact';
 import { chatService } from '../../chat/services/chatService';
 import { userService } from '../../auth/services/userService';
-import { CalendarEventResponse } from '../../calendar/services/calendarService';
+import { calendarService } from '../../calendar/services/calendarService';
 import { 
   isSameDay, 
   isAfter, 
@@ -20,6 +20,12 @@ import {
 import { logger } from '../../../utils/logger';
 import { taskService } from '../../tasks/services/taskService';
 import { Timestamp } from 'firebase/firestore';
+import { useAuthStore } from '../../auth/stores/authStore';
+
+interface MessageContext {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 export class AIService {
   private openai: OpenAI;
@@ -31,37 +37,43 @@ export class AIService {
     });
   }
 
-  async processUserInput(
-    input: string,
-    context: {
-      recentMessages?: Message[];
-      allChats?: { [chatId: string]: Message[] };
-      contacts?: Contact[];
-      tasks?: Task[];
-      userId: string;
-      currentChatId?: string;
-      currentContact?: { name: string; email: string; };
-      events?: CalendarEventResponse[];
-      conversationHistory?: Message[];
-    }
+  async processMessage(
+    message: string, 
+    context: MessageContext[] = []
   ): Promise<AIResponse> {
     try {
-      if (!ENV.OPENAI_API_KEY) {
-        throw new Error('OpenAI API key is not configured');
-      }
-
-      const systemPrompt = this.getSystemPrompt({
-        tasksContext: this.formatTasksContext(context.tasks || []),
-        messagesContext: this.formatAllMessagesContext(context.allChats || {}, context.currentChatId),
-        contactsContext: this.formatContactsContext(context.contacts || [], context.currentContact),
-        eventsContext: this.formatEventsContext(context.events || [])
+      logger.info('AIService.processMessage', 'Processing message with context', {
+        messageLength: message.length,
+        contextMessages: context.length
       });
 
-      // Convert conversation history to OpenAI message format
-      const conversationMessages = (context.conversationHistory || []).map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content
-      }));
+      const response = await this.makeAPIRequest([
+        ...context,
+        { role: 'user', content: message }
+      ]);
+
+      return response;
+    } catch (error) {
+      logger.error('AIService.processMessage', 'Failed to process message', { error });
+      throw error;
+    }
+  }
+
+  private async makeAPIRequest(messages: MessageContext[]): Promise<AIResponse> {
+    try {
+      const tomorrow = startOfTomorrow();
+      const systemPrompt = `You are a helpful AI assistant that creates calendar events and tasks. 
+Current date: ${format(new Date(), 'yyyy-MM-dd')}
+Tomorrow's date: ${format(tomorrow, 'yyyy-MM-dd')}
+
+When creating events:
+- Always use ISO 8601 format for dates
+- For "tomorrow", use ${format(tomorrow, 'yyyy-MM-dd')}
+- Include timezone in responses
+- Default duration is 1 hour if not specified
+- Be precise with dates and times
+
+Be concise and direct.`;
 
       const response = await this.openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -70,140 +82,102 @@ export class AIService {
             role: "system",
             content: systemPrompt
           },
-          // Include all previous messages in the conversation
-          ...conversationMessages,
-          // Add the current user message
-          {
-            role: "user",
-            content: input
-          }
+          ...messages.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
         ],
         functions: [
           {
-            name: "create_task",
-            description: "Create a new task",
-            parameters: {
-              type: "object",
-              properties: {
-                title: { 
-                  type: "string",
-                  description: "The title of the task"
-                },
-                description: { 
-                  type: "string",
-                  description: "Optional description of the task"
-                },
-                dueDate: { 
-                  type: "string", 
-                  format: "date-time",
-                  description: "When the task is due (ISO string)"
-                },
-                priority: { 
-                  type: "string", 
-                  enum: ["low", "medium", "high"],
-                  description: "Task priority level"
-                }
-              },
-              required: ["title"]
-            }
-          },
-          {
-            name: "send_message",
-            description: "Send a message in a chat",
-            parameters: {
-              type: "object",
-              properties: {
-                content: { type: "string" },
-                chatId: { type: "string" }
-              },
-              required: ["content", "chatId"]
-            }
-          },
-          {
             name: "create_event",
-            description: "Create a new calendar event",
+            description: "Create a calendar event",
             parameters: {
               type: "object",
               properties: {
-                summary: { type: "string" },
-                description: { type: "string" },
-                start: { 
+                summary: {
+                  type: "string",
+                  description: "Title of the event"
+                },
+                description: {
+                  type: "string",
+                  description: "Description of the event (optional)"
+                },
+                start: {
                   type: "object",
                   properties: {
-                    dateTime: { type: "string", format: "date-time" },
-                    timeZone: { type: "string" }
+                    dateTime: {
+                      type: "string",
+                      format: "date-time",
+                      description: "Start time of the event (ISO 8601)"
+                    }
                   },
-                  required: ["dateTime", "timeZone"]
+                  required: ["dateTime"]
                 },
                 end: {
                   type: "object",
                   properties: {
-                    dateTime: { type: "string", format: "date-time" },
-                    timeZone: { type: "string" }
+                    dateTime: {
+                      type: "string",
+                      format: "date-time",
+                      description: "End time of the event (ISO 8601)"
+                    }
                   },
-                  required: ["dateTime", "timeZone"]
+                  required: ["dateTime"]
                 }
               },
               required: ["summary", "start", "end"]
             }
           }
-        ]
+        ],
+        function_call: "auto"
       });
 
-      // If the response includes a send_message action, process it
-      const parsedResponse = this.parseAIResponse(response);
-      if (parsedResponse.action?.type === 'send_message') {
-        // If we're in a chat context, use that chat ID
-        if (context.currentChatId) {
-          parsedResponse.action.parameters.chatId = context.currentChatId;
-        }
-        // Otherwise, try to find the chat from the email
-        else {
-          const emailMatch = input.match(/send.*message.*to\s+(\S+@\S+\.\S+)/i);
-          if (emailMatch) {
-            const email = emailMatch[1];
-            const chatId = await this.chatService.findOrCreateChatWithEmail(
-              context.userId,
-              email
-            );
-            parsedResponse.action.parameters.chatId = chatId;
+      const aiMessage = response.choices[0]?.message;
+
+      if (!aiMessage) {
+        throw new Error('No response from AI');
+      }
+
+      logger.debug('AIService.makeAPIRequest', 'Received AI response', {
+        content: aiMessage.content,
+        functionCall: aiMessage.function_call
+      });
+
+      if (aiMessage.function_call) {
+        const functionCall = aiMessage.function_call;
+        const parameters = JSON.parse(functionCall.arguments);
+
+        // Handle function calls
+        if (functionCall.name === 'create_event') {
+          const userId = useAuthStore.getState().user?.uid;
+          if (userId) {
+            await this.handleEventCreation(userId, parameters);
           }
+
+          // Create action object for confirmation
+          const action: AIAction = {
+            type: 'create_event',
+            parameters
+          };
+
+          // Generate confirmation with event details
+          const confirmation = this.getActionConfirmation(action);
+
+          return {
+            text: aiMessage.content || 'Creating your event...',
+            confirmation,
+            action
+          };
         }
       }
 
-      // Handle task creation
-      if (parsedResponse.action?.type === 'create_task' && context.userId) {
-        await this.handleTaskCreation(context.userId, parsedResponse.action.parameters);
-      }
+      return {
+        text: aiMessage.content || 'I apologize, I could not process that request.'
+      };
 
-      return parsedResponse;
-    } catch (error: any) {
-      console.error('AI Processing Error:', {
-        message: error.message,
-        status: error.status,
-        code: error.code,
-        type: error.type,
-        hasApiKey: !!ENV.OPENAI_API_KEY
-      });
-
-      if (error.code === 'mismatched_organization') {
-        throw new Error(
-          "API key configuration error. Please check your OpenAI project settings."
-        );
-      }
-      if (error.status === 429) {
-        throw new Error(
-          "AI service quota exceeded. Please try again later."
-        );
-      }
-      if (error.status === 401) {
-        throw new Error(
-          "Invalid API key. Please check your configuration."
-        );
-      }
-      throw new Error(
-        error.message || "Something went wrong with the AI service. Please try again."
-      );
+    } catch (error) {
+      logger.error('AIService.makeAPIRequest', 'API request failed', { error });
+      throw error;
     }
   }
 
@@ -404,15 +378,20 @@ If a user asks about "that" or "it", look at previous messages for context.`;
 
   private getActionConfirmation(action: AIAction): string {
     switch (action.type) {
+      case 'create_event': {
+        const startDate = new Date(action.parameters.start.dateTime);
+        const endDate = new Date(action.parameters.end.dateTime);
+        return `I've created the event:
+Title: ${action.parameters.summary}
+Date: ${format(startDate, 'EEEE, MMMM d, yyyy')}
+Time: ${format(startDate, 'h:mm a')} - ${format(endDate, 'h:mm a')}
+${action.parameters.description ? `Description: ${action.parameters.description}` : ''}`;
+      }
       case 'send_message':
         return `I've sent your message: "${action.parameters.content}"`;
       case 'create_task':
         return `I've created a task: "${action.parameters.title}"${
-          action.parameters.dueDate ? ` due on ${new Date(action.parameters.dueDate).toLocaleDateString()}` : ''
-        }`;
-      case 'create_event':
-        return `I've created an event: "${action.parameters.summary}" on ${
-          format(new Date(action.parameters.start.dateTime), 'PPp')
+          action.parameters.dueDate ? ` due on ${format(new Date(action.parameters.dueDate), 'PPP')}` : ''
         }`;
       default:
         return 'Action completed successfully.';
@@ -426,64 +405,8 @@ If a user asks about "that" or "it", look at previous messages for context.`;
     if (functionCall) {
       try {
         const parameters = JSON.parse(functionCall.arguments);
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-        // Set the flag based on message content
-        this.messageContainsTomorrow = message.content?.toLowerCase().includes('tomorrow') || false;
-
-        // Add timezone to event parameters if it's a create_event action
-        if (functionCall.name === 'create_event') {
-          // Handle relative dates for events
-          const now = new Date();
-          let startDateTime = new Date(parameters.start.dateTime);
-          let endDateTime = new Date(parameters.end.dateTime);
-
-          // If the date is in the past, assume it means next occurrence
-          if (startDateTime < now) {
-            // If it's for "tomorrow" but date is wrong
-            if (message.content.toLowerCase().includes('tomorrow')) {
-              const tomorrow = startOfTomorrow();
-              startDateTime = new Date(
-                tomorrow.getFullYear(),
-                tomorrow.getMonth(),
-                tomorrow.getDate(),
-                startDateTime.getHours(),
-                startDateTime.getMinutes()
-              );
-              
-              // Adjust end time to maintain duration
-              const duration = endDateTime.getTime() - new Date(parameters.start.dateTime).getTime();
-              endDateTime = new Date(startDateTime.getTime() + duration);
-            }
-          }
-
-          parameters.start = {
-            dateTime: startDateTime.toISOString(),
-            timeZone: timezone
-          };
-          parameters.end = {
-            dateTime: endDateTime.toISOString(),
-            timeZone: timezone
-          };
-
-          logger.debug('AIService.parseAIResponse', 'Adjusted event dates', {
-            originalStart: parameters.start.dateTime,
-            originalEnd: parameters.end.dateTime,
-            adjustedStart: startDateTime.toISOString(),
-            adjustedEnd: endDateTime.toISOString(),
-            messageContent: message.content
-          });
-        }
-
-        // Add special handling for create_task
-        if (functionCall.name === 'create_task') {
-          logger.debug('AIService.parseAIResponse', 'Creating task with parameters', {
-            parameters,
-            messageContent: message.content,
-            containsTomorrow: this.messageContainsTomorrow
-          });
-        }
-
+        
+        // Create action object
         const action: AIAction = {
           type: functionCall.name as 'create_task' | 'send_message' | 'create_event',
           parameters: this.formatActionParameters(functionCall.name, parameters)
@@ -494,8 +417,17 @@ If a user asks about "that" or "it", look at previous messages for context.`;
           parameters: action.parameters
         });
 
-        // Reset the flag after use
-        this.messageContainsTomorrow = false;
+        // Execute the action immediately
+        if (action.type === 'create_event') {
+          // Get the user ID from the auth store
+          const userId = useAuthStore.getState().user?.uid;
+          if (userId) {
+            this.handleEventCreation(userId, action.parameters)
+              .catch(error => {
+                logger.error('AIService.parseAIResponse', 'Failed to create event', { error });
+              });
+          }
+        }
 
         return {
           text: message.content || '',
@@ -572,4 +504,72 @@ If a user asks about "that" or "it", look at previous messages for context.`;
       throw new Error('Failed to create task');
     }
   }
-} 
+
+  private async handleEventCreation(userId: string, parameters: any): Promise<void> {
+    try {
+      logger.debug('AIService.handleEventCreation', 'Creating event with parameters', {
+        parameters
+      });
+
+      if (!parameters.summary || !parameters.start || !parameters.end) {
+        throw new Error('Missing required event parameters');
+      }
+
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      let startDate = new Date(parameters.start.dateTime);
+      let endDate = new Date(parameters.end.dateTime);
+
+      // If the date is in the past, assume it means next occurrence
+      const now = new Date();
+      if (startDate < now) {
+        // If message mentions tomorrow, use tomorrow's date
+        if (this.messageContainsTomorrow) {
+          const tomorrow = startOfTomorrow();
+          startDate = new Date(
+            tomorrow.getFullYear(),
+            tomorrow.getMonth(),
+            tomorrow.getDate(),
+            startDate.getHours(),
+            startDate.getMinutes()
+          );
+          
+          // Adjust end time to maintain duration
+          const duration = endDate.getTime() - new Date(parameters.start.dateTime).getTime();
+          endDate = new Date(startDate.getTime() + duration);
+        }
+      }
+
+      const eventData = {
+        summary: parameters.summary,
+        description: parameters.description || '',
+        start: {
+          dateTime: startDate.toISOString(),
+          timeZone: timezone
+        },
+        end: {
+          dateTime: endDate.toISOString(),
+          timeZone: timezone
+        },
+        attendees: parameters.attendees
+      };
+
+      logger.debug('AIService.handleEventCreation', 'Adjusted event data', {
+        originalStart: parameters.start.dateTime,
+        originalEnd: parameters.end.dateTime,
+        adjustedStart: eventData.start.dateTime,
+        adjustedEnd: eventData.end.dateTime
+      });
+
+      await calendarService.createEvent(userId, eventData);
+      logger.debug('AIService.handleEventCreation', 'Event created successfully', {
+        eventData
+      });
+    } catch (error) {
+      logger.error('AIService.handleEventCreation', 'Failed to create event', { error });
+      throw new Error('Failed to create event');
+    }
+  }
+}
+
+// Create and export a single instance
+export const aiService = new AIService(); 

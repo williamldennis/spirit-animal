@@ -25,8 +25,25 @@ import { userService, UserProfile } from '../../auth/services/userService';
 import { SafeTextInput } from '../../../shared/components/SafeTextInput';
 import { useAI } from '../../ai/hooks/useAI';
 import { taskService } from '../../tasks/services/taskService';
+import { calendarService } from '../../calendar/services/calendarService';
+import { MessageContext } from '../../ai/types/index';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
+
+const getRecentMessages = (messages: Message[], count: number = 5): MessageContext[] => {
+  return messages
+    .slice(0, count)
+    .reverse()
+    .map(msg => ({
+      role: msg.senderId === 'ai-assistant' ? "assistant" as const : "user" as const,
+      content: msg.text
+    }));
+};
+
+const isAcknowledgment = (message: string): boolean => {
+  const acknowledgments = ['thanks', 'thank you', 'ok', 'okay', 'got it', 'cool', 'great'];
+  return acknowledgments.some(ack => message.toLowerCase().trim() === ack);
+};
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -98,23 +115,32 @@ export default function ChatScreen() {
       if (trimmedMessage.toLowerCase().startsWith('@spiritanimal')) {
         const aiQuery = trimmedMessage.substring('@spiritanimal'.length).trim();
         
-        // First send the user's message
-        await chatService.sendMessage(chatId, user.uid, trimmedMessage);
-        
-        // Process with AI and send response
-        const aiResponse = await processUserInput(aiQuery);
-        if (aiResponse.text) {
-          await chatService.sendMessage(chatId, 'ai-assistant', aiResponse.text, 'ai_suggestion');
-        }
-        
-        // If there's a confirmation message, send it as well
-        if (aiResponse.confirmation) {
-          await chatService.sendMessage(
-            chatId, 
-            'ai-assistant',
-            aiResponse.confirmation,
-            'ai_suggestion'
-          );
+        // Skip AI processing for acknowledgments
+        if (isAcknowledgment(aiQuery)) {
+          // Just send the user's message without AI response
+          await chatService.sendMessage(chatId, user.uid, trimmedMessage);
+        } else {
+          // First send the user's message
+          await chatService.sendMessage(chatId, user.uid, trimmedMessage);
+          
+          // Get recent message context
+          const recentMessages = getRecentMessages(messages);
+          
+          // Process with AI and send response, including context
+          const aiResponse = await processUserInput(aiQuery, recentMessages);
+          if (aiResponse.text) {
+            await chatService.sendMessage(chatId, 'ai-assistant', aiResponse.text, 'ai_suggestion');
+          }
+          
+          // If there's a confirmation message, send it as well
+          if (aiResponse.confirmation) {
+            await chatService.sendMessage(
+              chatId, 
+              'ai-assistant',
+              aiResponse.confirmation,
+              'ai_suggestion'
+            );
+          }
         }
       } else {
         // Regular message
@@ -134,7 +160,7 @@ export default function ChatScreen() {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ['Cancel', 'Create Task'],
+          options: ['Cancel', 'Create Task', 'Create Event'],
           cancelButtonIndex: 0,
           title: 'Message Options'
         },
@@ -151,6 +177,32 @@ export default function ChatScreen() {
             } catch (error) {
               logger.error('ChatScreen', 'Error creating task', { error });
               Alert.alert('Error', 'Failed to create task. Please try again.');
+            }
+          } else if (buttonIndex === 2) {
+            try {
+              if (!user?.uid) throw new Error('User not authenticated');
+
+              const startTime = new Date();
+              const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 hour later
+
+              const eventData = {
+                summary: message.text,
+                description: `Created from chat with ${otherUser?.name || 'Unknown'}`,
+                start: {
+                  dateTime: startTime.toISOString(),
+                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                },
+                end: {
+                  dateTime: endTime.toISOString(),
+                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                }
+              };
+
+              await calendarService.createEvent(user.uid, eventData);
+              Alert.alert('Success', 'Event created successfully!');
+            } catch (error) {
+              logger.error('ChatScreen', 'Error creating event', { error });
+              Alert.alert('Error', 'Failed to create event. Please try again.');
             }
           }
         }
@@ -175,6 +227,36 @@ export default function ChatScreen() {
               } catch (error) {
                 logger.error('ChatScreen', 'Error creating task', { error });
                 Alert.alert('Error', 'Failed to create task. Please try again.');
+              }
+            }
+          },
+          {
+            text: 'Create Event',
+            onPress: async () => {
+              try {
+                if (!user?.uid) throw new Error('User not authenticated');
+
+                const startTime = new Date();
+                const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 hour later
+
+                const eventData = {
+                  summary: message.text,
+                  description: `Created from chat with ${otherUser?.name || 'Unknown'}`,
+                  start: {
+                    dateTime: startTime.toISOString(),
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                  },
+                  end: {
+                    dateTime: endTime.toISOString(),
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                  }
+                };
+
+                await calendarService.createEvent(user.uid, eventData);
+                Alert.alert('Success', 'Event created successfully!');
+              } catch (error) {
+                logger.error('ChatScreen', 'Error creating event', { error });
+                Alert.alert('Error', 'Failed to create event. Please try again.');
               }
             }
           },
@@ -278,17 +360,27 @@ export default function ChatScreen() {
               onPress={async () => {
                 if (!newMessage.trim() || sending) return;
                 const trimmedMessage = newMessage.trim();
-                // First set the message to empty to prevent double-sending
+                
+                // Skip AI processing for acknowledgments
+                if (isAcknowledgment(trimmedMessage)) {
+                  const aiMessage = `@spiritanimal ${trimmedMessage}`;
+                  await chatService.sendMessage(chatId, user.uid, aiMessage);
+                  setNewMessage('');
+                  return;
+                }
+
                 setNewMessage('');
-                // Then send as AI message
                 const aiMessage = `@spiritanimal ${trimmedMessage}`;
                 try {
                   setSending(true);
                   // First send the user's message
                   await chatService.sendMessage(chatId, user.uid, aiMessage);
                   
+                  // Get recent message context
+                  const recentMessages = getRecentMessages(messages);
+                  
                   // Process with AI and send response
-                  const aiResponse = await processUserInput(trimmedMessage);
+                  const aiResponse = await processUserInput(trimmedMessage, recentMessages);
                   if (aiResponse.text) {
                     await chatService.sendMessage(chatId, 'ai-assistant', aiResponse.text, 'ai_suggestion');
                   }
