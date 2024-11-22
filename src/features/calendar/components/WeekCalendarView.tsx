@@ -1,6 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { format, addDays, isSameDay } from 'date-fns';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../../types/navigation';
 import type { CalendarEventResponse } from '../services/calendarService';
 
 interface WeekCalendarViewProps {
@@ -9,11 +12,14 @@ interface WeekCalendarViewProps {
   daysToShow?: number;
 }
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 const WeekCalendarView: React.FC<WeekCalendarViewProps> = ({ 
   events, 
   currentDate = new Date(),
-  daysToShow = 30 // Default to 30 days
+  daysToShow = 30
 }) => {
+  const navigation = useNavigation<NavigationProp>();
   const days = Array.from({ length: daysToShow }, (_, i) => addDays(currentDate, i));
 
   const getEventsForDay = (date: Date) => {
@@ -21,6 +27,10 @@ const WeekCalendarView: React.FC<WeekCalendarViewProps> = ({
       const eventDate = new Date(event.start.dateTime);
       return isSameDay(eventDate, date);
     });
+  };
+
+  const handleEventPress = (event: CalendarEventResponse) => {
+    navigation.navigate('EventDetail', { event });
   };
 
   return (
@@ -35,14 +45,18 @@ const WeekCalendarView: React.FC<WeekCalendarViewProps> = ({
           </Text>
           <View style={styles.eventsContainer}>
             {getEventsForDay(day).map((event, eventIndex) => (
-              <View key={eventIndex} style={styles.eventItem}>
+              <TouchableOpacity
+                key={eventIndex}
+                style={styles.eventItem}
+                onPress={() => handleEventPress(event)}
+              >
                 <Text style={styles.eventTime}>
                   {format(new Date(event.start.dateTime), 'h:mm a')}
                 </Text>
                 <Text style={styles.eventTitle} numberOfLines={1}>
                   {event.summary}
                 </Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         </View>

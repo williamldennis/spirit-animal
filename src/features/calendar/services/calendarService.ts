@@ -377,6 +377,73 @@ class CalendarService {
       throw error;
     }
   }
+
+  async updateEvent(userId: string, eventId: string, eventData: Partial<CalendarEventResponse>) {
+    try {
+      logger.debug('CalendarService.updateEvent', 'Updating event', { userId, eventId });
+      
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      const tokens = userDoc.data()?.calendarTokens;
+
+      if (!tokens?.accessToken) {
+        logger.error('CalendarService.updateEvent', 'No access token found');
+        throw new Error('Calendar not connected');
+      }
+
+      const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`;
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(eventData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update event');
+      }
+
+      return await response.json();
+    } catch (error) {
+      logger.error('CalendarService.updateEvent', 'Failed to update event', { error });
+      throw error;
+    }
+  }
+
+  async deleteEvent(userId: string, eventId: string) {
+    try {
+      logger.debug('CalendarService.deleteEvent', 'Deleting event', { userId, eventId });
+      
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      const tokens = userDoc.data()?.calendarTokens;
+
+      if (!tokens?.accessToken) {
+        logger.error('CalendarService.deleteEvent', 'No access token found');
+        throw new Error('Calendar not connected');
+      }
+
+      const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`;
+      
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete event');
+      }
+    } catch (error) {
+      logger.error('CalendarService.deleteEvent', 'Failed to delete event', { error });
+      throw error;
+    }
+  }
 }
 
 export const calendarService = new CalendarService();

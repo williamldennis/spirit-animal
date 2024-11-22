@@ -1,34 +1,40 @@
-import React from 'react';
+import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { format } from 'date-fns';
-import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../types/navigation';
-import type { CalendarEvent } from '../types';
+import EditEventModal from '../components/EditEventModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EventDetail'>;
 
-export function EventDetailScreen({ route, navigation }: Props) {
+const EventDetailScreen = ({ route, navigation }: Props) => {
   const { event } = route.params;
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  const handleEdit = () => {
-    navigation.navigate('EditEvent', { event });
-  };
+  // Configure the navigation header
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: event.summary,
+      headerShown: true,
+      headerRight: () => (
+        <TouchableOpacity 
+          style={styles.editButton}
+          onPress={() => setShowEditModal(true)}
+        >
+          <Feather name="edit-2" size={24} color="#2563EB" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, event]);
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{event.summary}</Text>
-        <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-          <Ionicons name="pencil" size={24} color="#2563EB" />
-        </TouchableOpacity>
-      </View>
-
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Time</Text>
         <Text style={styles.sectionContent}>
-          {format(new Date(event.start.dateTime), 'PPP p')}
+          {format(new Date(event.start.dateTime), 'PPpp')} - {'\n'}
+          {format(new Date(event.end.dateTime), 'PPpp')}
         </Text>
       </View>
 
@@ -46,41 +52,39 @@ export function EventDetailScreen({ route, navigation }: Props) {
         </View>
       )}
 
-      {event.attendees && (
+      {event.attendees && event.attendees.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Attendees</Text>
           {event.attendees.map((attendee, index) => (
             <View key={index} style={styles.attendeeItem}>
               <Text style={styles.attendeeName}>{attendee.email}</Text>
-              <Text style={styles.attendeeStatus}>{attendee.responseStatus}</Text>
+              <Text style={styles.attendeeStatus}>
+                {attendee.responseStatus === 'accepted' ? 'Going' : 
+                 attendee.responseStatus === 'declined' ? 'Not Going' : 
+                 attendee.responseStatus === 'tentative' ? 'Maybe' : 'Pending'}
+              </Text>
             </View>
           ))}
         </View>
       )}
+
+      <EditEventModal
+        visible={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        event={event}
+      />
     </ScrollView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
-  header: {
-    padding: 16,
-    backgroundColor: 'white',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-  },
   editButton: {
     padding: 8,
+    marginRight: 8,
   },
   section: {
     padding: 16,
@@ -88,7 +92,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
     color: '#6B7280',
     marginBottom: 8,
@@ -96,10 +100,12 @@ const styles = StyleSheet.create({
   sectionContent: {
     fontSize: 16,
     color: '#111827',
+    lineHeight: 24,
   },
   attendeeItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
@@ -112,4 +118,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
-}); 
+});
+
+export default EventDetailScreen; 

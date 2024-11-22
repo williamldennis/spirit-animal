@@ -6,6 +6,7 @@ import SignUpScreen from '../features/auth/screens/SignUpScreen';
 import HomeScreen from '../features/home/screens/HomeScreen';
 import SelectContactScreen from '../features/chat/screens/SelectContactScreen';
 import ChatScreen from '../features/chat/screens/ChatScreen';
+import EventDetailScreen from '../features/calendar/screens/EventDetailScreen';
 import { RootStackParamList } from '../types/navigation';
 import { useAuthStore } from '../features/auth/stores/authStore';
 import { logger } from '../utils/logger';
@@ -34,6 +35,11 @@ export default function AppNavigator() {
               options={{
                 animation: 'slide_from_right'
               }}
+            />
+            <Stack.Screen 
+              name="EventDetail" 
+              component={EventDetailScreen} 
+              options={{ title: 'Event Details' }} 
             />
           </>
         ) : (

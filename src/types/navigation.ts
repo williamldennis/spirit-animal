@@ -1,11 +1,12 @@
+import type { CalendarEventResponse } from '../features/calendar/services/calendarService';
+
 export type RootStackParamList = {
+  Home: undefined;
   SignIn: undefined;
   SignUp: undefined;
-  Home: undefined;
+  Chat: { chatId: string };
   SelectContact: undefined;
-  Chat: {
-    chatId: string;
-  };
+  EventDetail: { event: CalendarEventResponse };
 };
 
 // Add type safety for useNavigation
