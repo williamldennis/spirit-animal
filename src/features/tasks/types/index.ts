@@ -10,4 +10,5 @@ export interface Task {
   userId: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  parentTaskId?: string;
 } 

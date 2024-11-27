@@ -16,6 +16,7 @@ import { isToday, isTomorrow, format } from 'date-fns';
 import EditTaskModal from './EditTaskModal';
 import type { Task } from '../types';
 import type { Timestamp } from 'firebase/firestore';
+import { aiService } from '../../ai/services/aiService';
 
 type TaskSection = {
   title: string;
@@ -28,6 +29,7 @@ export default function TaskList() {
   const [showCompleted, setShowCompleted] = useState(false);
   const user = useAuthStore(state => state.user);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [expandingTask, setExpandingTask] = useState<string | null>(null);
 
   const formatDueDate = (dueDate: string | Date | Timestamp | undefined) => {
     if (!dueDate) return '';
@@ -78,45 +80,88 @@ export default function TaskList() {
     if (!user) return;
 
     const unsubscribe = taskService.subscribeToDayTasks(user.uid, (allTasks) => {
-      // Split tasks into sections
-      const incompleteTasks = allTasks.filter(task => !task.completed);
-      const completedTasks = allTasks.filter(task => task.completed);
-
-      const todayTasks = incompleteTasks.filter(task => {
-        const date = getTaskDate(task.dueDate);
-        return date && isToday(date);
+      // Group subtasks with their parent tasks
+      const taskMap = new Map<string, Task>();
+      const parentTasks: Task[] = [];
+      
+      // First pass: collect all tasks in a map and identify parent tasks
+      allTasks.forEach(task => {
+        taskMap.set(task.id, task);
+        if (!task.parentTaskId) {
+          parentTasks.push(task);
+        }
       });
 
-      const tomorrowTasks = incompleteTasks.filter(task => {
-        const date = getTaskDate(task.dueDate);
-        return date && isTomorrow(date);
-      });
+      // Process tasks into sections
+      const processTasksForSection = (tasks: Task[]) => {
+        // First, create a map of parent tasks to their subtasks
+        const taskGroups = new Map<string, Task[]>();
+        
+        // Group all subtasks by their parent
+        allTasks.forEach(task => {
+          if (task.parentTaskId) {
+            const subtasks = taskGroups.get(task.parentTaskId) || [];
+            subtasks.push(task);
+            taskGroups.set(task.parentTaskId, subtasks);
+          }
+        });
 
-      const futureTasks = incompleteTasks.filter(task => {
-        const date = getTaskDate(task.dueDate);
-        return !date || // Tasks with no due date
-          (date && !isToday(date) && !isTomorrow(date)); // Future dated tasks
-      });
+        // Process parent tasks and inject their subtasks
+        return tasks.reduce((acc: Task[], parentTask) => {
+          // Only process parent tasks
+          if (!parentTask.parentTaskId) {
+            // Add the parent task
+            acc.push(parentTask);
+            
+            // Add all subtasks for this parent
+            const subtasks = taskGroups.get(parentTask.id) || [];
+            subtasks
+              .sort((a, b) => {
+                if (a.completed !== b.completed) {
+                  return a.completed ? 1 : -1;
+                }
+                return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+              })
+              .forEach(subtask => acc.push(subtask));
+          }
+          return acc;
+        }, []);
+      };
+
+      const incompleteTasks = parentTasks.filter(task => !task.completed);
+      const completedTasks = parentTasks.filter(task => task.completed);
+
+      const todayTasks = processTasksForSection(
+        incompleteTasks.filter(task => {
+          const date = getTaskDate(task.dueDate);
+          return date && isToday(date);
+        })
+      );
+
+      const tomorrowTasks = processTasksForSection(
+        incompleteTasks.filter(task => {
+          const date = getTaskDate(task.dueDate);
+          return date && isTomorrow(date);
+        })
+      );
+
+      const futureTasks = processTasksForSection(
+        incompleteTasks.filter(task => {
+          const date = getTaskDate(task.dueDate);
+          return !date || (date && !isToday(date) && !isTomorrow(date));
+        })
+      );
 
       const sections: TaskSection[] = [
-        {
-          title: 'Today',
-          data: todayTasks,
-        },
-        {
-          title: 'Tomorrow',
-          data: tomorrowTasks,
-        },
-        {
-          title: 'Future',
-          data: futureTasks,
-        }
+        { title: 'Today', data: todayTasks },
+        { title: 'Tomorrow', data: tomorrowTasks },
+        { title: 'Future', data: futureTasks }
       ];
 
       if (showCompleted && completedTasks.length > 0) {
         sections.push({
           title: 'Completed',
-          data: completedTasks,
+          data: processTasksForSection(completedTasks)
         });
       }
 
@@ -138,6 +183,20 @@ export default function TaskList() {
 
   const handleTaskLongPress = (task: Task) => {
     setEditingTask(task);
+  };
+
+  const handleExpandTask = async (task: Task) => {
+    if (expandingTask) return; // Prevent multiple expansions at once
+    
+    try {
+      setExpandingTask(task.id);
+      await aiService.expandTaskIntoSubtasks(task);
+    } catch (error) {
+      logger.error('TaskList.handleExpandTask', 'Failed to expand task', { error });
+      Alert.alert('Error', 'Failed to break down task. Please try again.');
+    } finally {
+      setExpandingTask(null);
+    }
   };
 
   if (loading) {
@@ -174,44 +233,70 @@ export default function TaskList() {
             <Text style={styles.sectionTitle}>{title}</Text>
           </View>
         )}
-        renderItem={({ item, section }) => (
-          <View style={[
-            styles.taskItem,
-            section.title === 'Completed' && styles.completedTaskItem
-          ]}>
-            <TouchableOpacity
-              style={styles.checkbox}
-              onPress={() => handleToggleTask(item.id, !item.completed)}
-            >
-              {item.completed ? (
-                <Feather name="check-square" size={20} color="#2563EB" />
-              ) : (
-                <Feather name="square" size={20} color="#9CA3AF" />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.taskContent}
-              onPress={() => handleTaskLongPress(item)}
-            >
-              <View style={styles.taskTitleRow}>
-                <Text style={[
-                  styles.taskTitle,
-                  item.completed && styles.taskTitleCompleted
-                ]}>
-                  {item.title}
-                </Text>
-                {item.dueDate && (
-                  <Text style={styles.taskDueDate}>
-                    {formatDueDate(item.dueDate)}
+        renderItem={({ item, section }) => {
+          const isSubtask = !!item.parentTaskId;
+          
+          return (
+            <View style={[
+              styles.taskItem,
+              section.title === 'Completed' && styles.completedTaskItem,
+              isSubtask && styles.subtaskItem
+            ]}>
+              <TouchableOpacity
+                style={styles.checkbox}
+                onPress={() => handleToggleTask(item.id, !item.completed)}
+              >
+                {item.completed ? (
+                  <Feather name="check-square" size={20} color="#2563EB" />
+                ) : (
+                  <Feather name="square" size={20} color="#9CA3AF" />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.taskContent}
+                onPress={() => handleTaskLongPress(item)}
+              >
+                <View style={styles.taskTitleRow}>
+                  <Text style={[
+                    styles.taskTitle,
+                    isSubtask && styles.subtaskTitle,
+                    item.completed && styles.taskTitleCompleted
+                  ]}>
+                    {item.title}
+                  </Text>
+                  
+                  <View style={styles.taskActions}>
+                    {!isSubtask && ( // Only show fox button for parent tasks
+                      <TouchableOpacity 
+                        onPress={() => handleExpandTask(item)}
+                        disabled={expandingTask === item.id}
+                        style={styles.expandButton}
+                      >
+                        {expandingTask === item.id ? (
+                          <ActivityIndicator size="small" color="#2563EB" />
+                        ) : (
+                          <Text style={styles.expandButtonText}>🦊</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    {item.dueDate && (
+                      <Text style={styles.taskDueDate}>
+                        {formatDueDate(item.dueDate)}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                
+                {item.description && (
+                  <Text style={styles.taskDescription} numberOfLines={2}>
+                    {item.description}
                   </Text>
                 )}
-              </View>
-              {item.description && (
-                <Text style={styles.taskDescription}>{item.description}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
+              </TouchableOpacity>
+            </View>
+          );
+        }}
       />
       
       {editingTask && (
@@ -257,11 +342,23 @@ const styles = StyleSheet.create({
   },
   taskContent: {
     flex: 1,
+    paddingRight: 8,
+  },
+  taskTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'nowrap',
   },
   taskTitle: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '500',
     color: '#111827',
+  },
+  subtaskTitle: {
+    fontSize: 15,
+    color: '#4B5563',
   },
   taskTitleCompleted: {
     textDecorationLine: 'line-through',
@@ -293,14 +390,27 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     backgroundColor: '#F9FAFB',
   },
-  taskTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  subtaskItem: {
+    marginLeft: 40,
+    paddingLeft: 24,
+    borderLeftWidth: 2,
+    borderLeftColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  expandButton: {
+    padding: 4,
+    marginLeft: 'auto',
+  },
+  expandButtonText: {
+    fontSize: 16,
   },
   taskDueDate: {
     fontSize: 12,
     color: '#6B7280',
-    marginLeft: 8,
+  },
+  taskActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 }); 

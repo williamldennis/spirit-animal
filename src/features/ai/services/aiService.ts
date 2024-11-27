@@ -630,6 +630,108 @@ Title: ${action.parameters.title}`;
       throw new Error('Failed to create event');
     }
   }
+
+  private async breakdownTask(task: Task): Promise<AIResponse> {
+    try {
+      const systemPrompt = `You are a helpful AI assistant that breaks down tasks into logical subtasks.
+      
+Guidelines for breaking down tasks:
+- Create 3-5 sequential steps
+- Each step should be clear and actionable
+- Consider prerequisites and dependencies
+- Focus on practical, achievable steps
+- Keep steps concise but descriptive
+
+Current task to breakdown: "${task.title}"
+${task.description ? `Additional context: ${task.description}` : ''}`;
+
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          {
+            role: "user",
+            content: `Please break down this task into subtasks: ${task.title}`
+          }
+        ],
+        functions: [
+          {
+            name: "create_subtasks",
+            description: "Create subtasks for the main task",
+            parameters: {
+              type: "object",
+              properties: {
+                subtasks: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: {
+                        type: "string",
+                        description: "Title of the subtask"
+                      },
+                      description: {
+                        type: "string",
+                        description: "Optional description of the subtask"
+                      }
+                    },
+                    required: ["title"]
+                  }
+                }
+              },
+              required: ["subtasks"]
+            }
+          }
+        ],
+        function_call: { name: "create_subtasks" }
+      });
+
+      const aiMessage = response.choices[0]?.message;
+
+      if (!aiMessage?.function_call) {
+        throw new Error('No response from AI');
+      }
+
+      const parameters = JSON.parse(aiMessage.function_call.arguments);
+      
+      // Create subtasks
+      const userId = useAuthStore.getState().user?.uid;
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
+      // Create all subtasks with parentTaskId
+      for (const subtask of parameters.subtasks) {
+        await taskService.createTask(userId, {
+          title: subtask.title,
+          description: subtask.description,
+          parentTaskId: task.id, // Ensure this is set
+          dueDate: task.dueDate,
+          priority: task.priority
+        });
+      }
+
+      return {
+        text: aiMessage.content || 'Breaking down your task...',
+        action: {
+          type: 'create_subtasks',
+          parameters
+        },
+        confirmation: `I've broken down "${task.title}" into ${parameters.subtasks.length} subtasks.`
+      };
+
+    } catch (error) {
+      logger.error('AIService.breakdownTask', 'Failed to break down task', { error });
+      throw error;
+    }
+  }
+
+  public async expandTaskIntoSubtasks(task: Task): Promise<AIResponse> {
+    return this.breakdownTask(task);
+  }
 }
 
 // Create and export a single instance

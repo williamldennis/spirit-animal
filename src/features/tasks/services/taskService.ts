@@ -1,4 +1,4 @@
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { logger } from '../../../utils/logger';
 import type { Task } from '../types';
@@ -40,13 +40,37 @@ class TaskService {
   async createTask(userId: string, taskData: Partial<Task>): Promise<Task> {
     try {
       const tasksRef = collection(db, 'tasks');
-      const newTask = {
-        ...taskData,
+      
+      // Create base task data without undefined values
+      const baseTask = {
         userId,
         completed: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: Timestamp.fromDate(new Date()),
+        updatedAt: Timestamp.fromDate(new Date())
       };
+
+      // Filter out undefined values from taskData
+      const filteredTaskData = Object.entries(taskData).reduce((acc, [key, value]) => {
+        if (value !== undefined) {
+          // Convert Date objects to Timestamps
+          if (value instanceof Date) {
+            acc[key] = Timestamp.fromDate(value);
+          } else {
+            acc[key] = value;
+          }
+        }
+        return acc;
+      }, {} as Record<string, any>);
+
+      // Merge the filtered data
+      const newTask = {
+        ...baseTask,
+        ...filteredTaskData
+      };
+
+      logger.debug('TaskService.createTask', 'Creating task with data', {
+        taskData: newTask
+      });
 
       const docRef = await addDoc(tasksRef, newTask);
       return {
@@ -103,21 +127,30 @@ class TaskService {
       const q = query(
         tasksRef,
         where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc') // Simplify query to debug
       );
       
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const tasks = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Task[];
+        const tasks = snapshot.docs.map(doc => {
+          const data = doc.data();
+          // Ensure timestamps are properly converted
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            dueDate: data.dueDate || null
+          } as Task;
+        });
 
         logger.debug('TaskService.subscribeToDayTasks', 'Tasks updated', { 
           taskCount: tasks.length,
           sampleTasks: tasks.slice(0, 3).map(t => ({
             id: t.id,
             title: t.title,
-            completed: t.completed
+            completed: t.completed,
+            parentTaskId: t.parentTaskId,
+            createdAt: t.createdAt
           }))
         });
 
