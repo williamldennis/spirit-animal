@@ -6,7 +6,8 @@ import {
   TouchableOpacity, 
   ActivityIndicator,
   SectionList,
-  Alert
+  Alert,
+  Pressable
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { taskService } from '../services/taskService';
@@ -37,6 +38,7 @@ export default function TaskList() {
   const { setAIResponse } = useAIStore();
   const isAIBottomSheetVisible = useBottomSheet((state) => state.isAIBottomSheetVisible);
   const hideAIBottomSheet = useBottomSheet((state) => state.hideAIBottomSheet);
+  const [viewingTaskId, setViewingTaskId] = useState<string | null>(null);
 
   const formatDueDate = (dueDate: string | Date | Timestamp | undefined) => {
     if (!dueDate) return '';
@@ -218,12 +220,22 @@ export default function TaskList() {
 
       const response = await aiService.attemptAutoComplete(task);
       
-      // Show the AI's response in the bottom sheet
-      setAIResponse(response);
+      // Get parent task title
+      const parentTask = tasks.find(section => 
+        section.data.find(t => t.id === task.parentTaskId)
+      )?.data.find(t => t.id === task.parentTaskId);
+
+      // Store response with task context
+      setAIResponse(
+        response, 
+        task.id, 
+        parentTask?.title || 'Task Results',
+        task.title
+      );
+      setViewingTaskId(task.id);
       showAIBottomSheet();
 
       if (response.completed) {
-        // Task was completed automatically
         await taskService.toggleTaskComplete(task.id, true);
         logger.debug('TaskList.handleAutoCompleteTask', 'Task completed successfully', {
           taskId: task.id,
@@ -240,6 +252,20 @@ export default function TaskList() {
       Alert.alert('Error', 'Failed to process task. Please try again.');
     } finally {
       setExpandingTask(null);
+    }
+  };
+
+  const handleViewTaskResults = (task: Task) => {
+    const conversation = useAIStore.getState().getTaskResponses(task.id);
+    if (conversation) {
+      setViewingTaskId(task.id);
+      setAIResponse(
+        conversation.responses[conversation.responses.length - 1],
+        task.id,
+        conversation.parentTaskTitle,
+        task.title
+      );
+      showAIBottomSheet();
     }
   };
 
@@ -345,9 +371,19 @@ export default function TaskList() {
                 </View>
                 
                 {item.description && (
-                  <Text style={styles.taskDescription} numberOfLines={2}>
-                    {item.description}
-                  </Text>
+                  <View>
+                    <Text style={styles.taskDescription} numberOfLines={2}>
+                      {item.description}
+                    </Text>
+                    {item.completed && isSubtask && (
+                      <Pressable 
+                        onPress={() => handleViewTaskResults(item)}
+                        style={styles.viewResultsButton}
+                      >
+                        <Text style={styles.viewResultsText}>View Results 📝</Text>
+                      </Pressable>
+                    )}
+                  </View>
                 )}
               </TouchableOpacity>
             </View>
@@ -365,7 +401,11 @@ export default function TaskList() {
 
       <AIBottomSheet 
         visible={isAIBottomSheetVisible}
-        onClose={hideAIBottomSheet}
+        onClose={() => {
+          hideAIBottomSheet();
+          setViewingTaskId(null);
+        }}
+        taskId={viewingTaskId}
       />
     </View>
   );
@@ -480,5 +520,15 @@ const styles = StyleSheet.create({
   },
   autoCompleteButtonText: {
     fontSize: 16,
+  },
+  viewResultsButton: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewResultsText: {
+    color: '#2563EB',
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 }); 

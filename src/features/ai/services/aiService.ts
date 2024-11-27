@@ -21,6 +21,7 @@ import { logger } from '../../../utils/logger';
 import { taskService } from '../../tasks/services/taskService';
 import { Timestamp } from 'firebase/firestore';
 import { useAuthStore } from '../../auth/stores/authStore';
+import { useAIStore } from '../../ai/stores/aiStore';
 
 interface MessageContext {
   role: 'user' | 'assistant';
@@ -735,19 +736,48 @@ ${task.description ? `Additional context: ${task.description}` : ''}`;
 
   public async attemptAutoComplete(task: Task): Promise<AIResponse> {
     try {
-      // Get parent task and sibling tasks if this is a subtask
       const userId = useAuthStore.getState().user?.uid;
       if (!userId) throw new Error('User not authenticated');
 
       let contextualTasks: Task[] = [];
       let parentTask: Task | null = null;
+      let completedSubtaskResults: string = '';
       
       if (task.parentTaskId) {
-        // Get parent task
+        // Get all related tasks
         const tasks = await this.getTasks(userId);
         parentTask = tasks.find(t => t.id === task.parentTaskId) || null;
-        // Get sibling tasks
-        contextualTasks = tasks.filter(t => t.parentTaskId === task.parentTaskId);
+        
+        // Get sibling tasks and their results
+        const siblingTasks = tasks.filter(t => t.parentTaskId === task.parentTaskId);
+        contextualTasks = siblingTasks;
+
+        // Get completed subtask results from AIStore
+        const completedResults = siblingTasks
+          .filter(t => t.completed)
+          .map(t => {
+            const conversation = useAIStore.getState().getTaskResponses(t.id);
+            if (conversation && conversation.responses.length > 0) {
+              const lastResponse = conversation.responses[conversation.responses.length - 1];
+              return {
+                task: t.title,
+                output: lastResponse.text,
+                content: lastResponse.generatedContent
+              };
+            }
+            return null;
+          })
+          .filter(result => result !== null);
+
+        if (completedResults.length > 0) {
+          completedSubtaskResults = `
+Completed Subtask Results:
+${completedResults.map(result => `
+Task: ${result?.task}
+Output: ${result?.output}
+${result?.content ? `Generated Content: ${JSON.stringify(result.content, null, 2)}` : ''}`
+          ).join('\n')}`;
+        }
       }
 
       const systemPrompt = `You are an advanced AI executive assistant with comprehensive capabilities. You have access to the following context:
@@ -757,6 +787,21 @@ ${parentTask.description ? `Parent Task Description: ${parentTask.description}` 
 
 ${contextualTasks.length > 0 ? `Related Subtasks:
 ${contextualTasks.map(t => `- ${t.title}${t.completed ? ' (Completed)' : ''}`).join('\n')}` : ''}
+
+${completedSubtaskResults}
+
+Guidelines for Task Completion:
+1. Always provide a best-effort initial solution
+2. Make reasonable assumptions when information is missing
+3. Clearly state any assumptions made
+4. Suggest areas that might need refinement
+5. Be ready to modify the solution based on user feedback
+
+For example:
+- When planning a menu: Start with standard portions and common dietary options
+- When creating guest lists: Begin with a template for different group sizes
+- When scheduling: Propose typical time slots that can be adjusted
+- When budgeting: Use average costs that can be refined
 
 Core Executive Assistant Capabilities:
 1. Planning & Organization
@@ -962,28 +1007,70 @@ ${task.description ? `Task Description: ${task.description}` : ''}`;
           const content = parameters.generatedContent;
           switch (content.type) {
             case 'menu':
-              formattedOutput = `📋 Suggested Menu:\n\n${content.items.map(category => 
-                `${category.category}:\n${category.items.map(item => `• ${item}`).join('\n')}`
-              ).join('\n\n')}`;
+              formattedOutput = `📋 Suggested Menu:\n\n${content.items?.map(category => 
+                `${category.category}:\n${category.items?.map(item => `• ${item}`).join('\n') || 'No items'}`
+              ).join('\n\n') || 'No menu items available'}
+
+🤔 Assumptions Made:
+- Standard portion sizes
+- No specific dietary restrictions
+- Traditional preferences
+
+✏️ Areas to Refine:
+- Adjust portions based on guest count
+- Add dietary restrictions/preferences
+- Modify based on kitchen equipment
+- Consider budget constraints
+
+💬 Chat with me to refine this menu!`;
               break;
             case 'shopping_list':
-              formattedOutput = `🛒 Shopping List:\n\n${content.items.map(category =>
-                `${category.category}:\n${category.items.map(item => `• ${item}`).join('\n')}`
-              ).join('\n\n')}`;
+              formattedOutput = `🛒 Shopping List:\n\n${content.items?.map(category =>
+                `${category.category}:\n${category.items?.map(item => `• ${item}`).join('\n') || 'No items'}`
+              ).join('\n\n') || 'No shopping items available'}
+
+🤔 Assumptions Made:
+- Standard portion sizes
+- No specific dietary restrictions
+- Traditional preferences
+
+✏️ Areas to Refine:
+- Adjust portions based on guest count
+- Add dietary restrictions/preferences
+- Modify based on kitchen equipment
+- Consider budget constraints
+
+💬 Chat with me to refine this shopping list!`;
               break;
             case 'schedule':
-              formattedOutput = `⏰ Schedule:\n\n${content.items.map(timeSlot =>
-                `${timeSlot.category}:\n${timeSlot.items.map(item => `• ${item}`).join('\n')}`
-              ).join('\n\n')}`;
+              formattedOutput = `⏰ Schedule:\n\n${content.items?.map(timeSlot =>
+                `${timeSlot.category}:\n${timeSlot.items?.map(item => `• ${item}`).join('\n') || 'No items'}`
+              ).join('\n\n') || 'No schedule items available'}
+
+🤔 Assumptions Made:
+- Standard time slots
+- No specific timing preferences
+- Traditional preferences
+
+✏️ Areas to Refine:
+- Adjust time slots based on guest count
+- Add specific timing preferences
+- Modify based on venue availability
+- Consider budget constraints
+
+💬 Chat with me to refine this schedule!`;
               break;
-            // Add other format types as needed
+            default:
+              // For any other content type, use the raw output
+              formattedOutput = parameters.output || 'Task completed successfully';
+              break;
           }
         }
 
         return {
           text: formattedOutput,
           completed: true,
-          confirmation: `I've completed "${task.title}"\n\n${parameters.generatedContent?.summary || ''}`,
+          confirmation: `I've completed "${task.title}" with an initial proposal.\n\nLet's refine it together to make it perfect for your needs!`,
           generatedContent: parameters.generatedContent
         };
       } else {

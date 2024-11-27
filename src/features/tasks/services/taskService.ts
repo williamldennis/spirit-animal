@@ -1,4 +1,4 @@
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy, onSnapshot, Timestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { logger } from '../../../utils/logger';
 import type { Task } from '../types';
@@ -162,6 +162,25 @@ class TaskService {
       return unsubscribe;
     } catch (error) {
       logger.error('TaskService.subscribeToDayTasks', 'Failed to setup subscription', { error });
+      throw error;
+    }
+  }
+
+  async getTask(taskId: string): Promise<Task | null> {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        return null;
+      }
+
+      return {
+        id: taskDoc.id,
+        ...taskDoc.data()
+      } as Task;
+    } catch (error) {
+      logger.error('TaskService.getTask', 'Failed to fetch task', { taskId, error });
       throw error;
     }
   }
