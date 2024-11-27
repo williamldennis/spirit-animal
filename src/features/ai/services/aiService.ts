@@ -735,24 +735,121 @@ ${task.description ? `Additional context: ${task.description}` : ''}`;
 
   public async attemptAutoComplete(task: Task): Promise<AIResponse> {
     try {
-      const systemPrompt = `You are an AI assistant that can complete certain types of tasks. 
+      // Get parent task and sibling tasks if this is a subtask
+      const userId = useAuthStore.getState().user?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      let contextualTasks: Task[] = [];
+      let parentTask: Task | null = null;
       
-Current capabilities:
-- Send emails
-- Create calendar events
-- Set reminders
-- Make simple calculations
-- Format text
-- Generate lists
-- Basic data analysis
+      if (task.parentTaskId) {
+        // Get parent task
+        const tasks = await this.getTasks(userId);
+        parentTask = tasks.find(t => t.id === task.parentTaskId) || null;
+        // Get sibling tasks
+        contextualTasks = tasks.filter(t => t.parentTaskId === task.parentTaskId);
+      }
 
-When asked to complete a task:
-1. Analyze if the task is within your capabilities
-2. If yes, complete the task and provide the output
-3. If no, politely explain that you haven't learned to complete this type of task yet
+      const systemPrompt = `You are an advanced AI executive assistant with comprehensive capabilities. You have access to the following context:
 
-Task to analyze: "${task.title}"
-${task.description ? `Additional context: ${task.description}` : ''}`;
+${parentTask ? `Parent Task: "${parentTask.title}"
+${parentTask.description ? `Parent Task Description: ${parentTask.description}` : ''}` : ''}
+
+${contextualTasks.length > 0 ? `Related Subtasks:
+${contextualTasks.map(t => `- ${t.title}${t.completed ? ' (Completed)' : ''}`).join('\n')}` : ''}
+
+Core Executive Assistant Capabilities:
+1. Planning & Organization
+   - Create detailed project plans and timelines
+   - Break down complex tasks into actionable steps
+   - Organize and prioritize tasks
+   - Create schedules and agendas
+
+2. Event Planning
+   - Plan meetings, parties, and events
+   - Create guest lists and seating arrangements
+   - Coordinate catering and vendors
+   - Design event timelines
+   - Manage RSVPs and attendance
+
+3. Travel Planning
+   - Create travel itineraries
+   - Research flights and accommodations
+   - Plan transportation logistics
+   - Create packing lists
+   - Suggest activities and dining options
+
+4. Documentation & Communication
+   - Draft emails and messages
+   - Create professional documents
+   - Format reports and presentations
+   - Write meeting minutes and summaries
+   - Compose invitations and announcements
+
+5. Research & Analysis
+   - Conduct market research
+   - Compare products and services
+   - Analyze data and create summaries
+   - Research venues and vendors
+   - Find and verify information
+
+6. Food & Dining
+   - Plan menus for various occasions
+   - Create detailed shopping lists
+   - Calculate portions and ingredients
+   - Suggest wine pairings
+   - Plan meal prep schedules
+
+7. Budget & Finance
+   - Create basic budgets
+   - Track expenses
+   - Calculate costs and estimates
+   - Compare prices
+   - Suggest cost-saving measures
+
+8. Home & Life Management
+   - Create cleaning schedules
+   - Plan home maintenance tasks
+   - Organize spaces and storage
+   - Create inventory lists
+   - Plan daily routines
+
+9. Gift & Shopping
+   - Create gift ideas and suggestions
+   - Make shopping lists
+   - Compare products and prices
+   - Plan holiday shopping
+   - Track orders and deliveries
+
+10. Health & Wellness
+    - Plan workout schedules
+    - Create meal plans
+    - Track health goals
+    - Schedule medical appointments
+    - Create self-care routines
+
+Output Formats:
+- Structured lists and categories
+- Detailed timelines
+- Step-by-step instructions
+- Schedules and calendars
+- Budget spreadsheets
+- Menu plans
+- Travel itineraries
+- Shopping lists
+- Email drafts
+- Event plans
+
+When completing a task:
+1. Analyze the task and context thoroughly
+2. Consider all relevant capabilities and resources
+3. Provide detailed, actionable output
+4. Include specific recommendations and alternatives
+5. Consider timing, budget, and practical constraints
+6. Provide clear next steps or follow-up actions
+
+Current task: "${task.title}"
+${task.description ? `Task Description: ${task.description}` : ''}`;
 
       const response = await this.openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -763,7 +860,7 @@ ${task.description ? `Additional context: ${task.description}` : ''}`;
           },
           {
             role: "user",
-            content: `Can you complete this task: ${task.title}?`
+            content: `Please complete this task: ${task.title}`
           }
         ],
         functions: [
@@ -784,6 +881,62 @@ ${task.description ? `Additional context: ${task.description}` : ''}`;
                 reason: {
                   type: "string",
                   description: "Explanation of why the task can or cannot be completed"
+                },
+                generatedContent: {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      enum: [
+                        "menu",
+                        "shopping_list",
+                        "schedule",
+                        "guest_list",
+                        "invitation",
+                        "checklist",
+                        "budget",
+                        "itinerary",
+                        "email",
+                        "workout_plan",
+                        "meal_plan",
+                        "project_plan",
+                        "comparison",
+                        "research",
+                        "other"
+                      ],
+                      description: "Type of content generated"
+                    },
+                    items: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          category: { type: "string" },
+                          items: {
+                            type: "array",
+                            items: { type: "string" }
+                          },
+                          notes: { type: "string" },
+                          timing: { type: "string" },
+                          cost: { type: "number" },
+                          priority: { type: "string" },
+                          status: { type: "string" }
+                        }
+                      },
+                      description: "Structured content items"
+                    },
+                    summary: { type: "string" },
+                    nextSteps: {
+                      type: "array",
+                      items: { type: "string" },
+                      description: "Suggested next actions"
+                    },
+                    alternatives: {
+                      type: "array",
+                      items: { type: "string" },
+                      description: "Alternative options or approaches"
+                    }
+                  }
                 }
               },
               required: ["canComplete", "reason"]
@@ -802,10 +955,36 @@ ${task.description ? `Additional context: ${task.description}` : ''}`;
       const parameters = JSON.parse(aiMessage.function_call.arguments);
       
       if (parameters.canComplete) {
+        // Format the output based on the content type
+        let formattedOutput = parameters.output || '';
+        
+        if (parameters.generatedContent) {
+          const content = parameters.generatedContent;
+          switch (content.type) {
+            case 'menu':
+              formattedOutput = `📋 Suggested Menu:\n\n${content.items.map(category => 
+                `${category.category}:\n${category.items.map(item => `• ${item}`).join('\n')}`
+              ).join('\n\n')}`;
+              break;
+            case 'shopping_list':
+              formattedOutput = `🛒 Shopping List:\n\n${content.items.map(category =>
+                `${category.category}:\n${category.items.map(item => `• ${item}`).join('\n')}`
+              ).join('\n\n')}`;
+              break;
+            case 'schedule':
+              formattedOutput = `⏰ Schedule:\n\n${content.items.map(timeSlot =>
+                `${timeSlot.category}:\n${timeSlot.items.map(item => `• ${item}`).join('\n')}`
+              ).join('\n\n')}`;
+              break;
+            // Add other format types as needed
+          }
+        }
+
         return {
-          text: parameters.output || 'Task completed successfully',
+          text: formattedOutput,
           completed: true,
-          confirmation: `I've completed the task: "${task.title}"\n\n${parameters.output}`
+          confirmation: `I've completed "${task.title}"\n\n${parameters.generatedContent?.summary || ''}`,
+          generatedContent: parameters.generatedContent
         };
       } else {
         return {
@@ -817,6 +996,15 @@ ${task.description ? `Additional context: ${task.description}` : ''}`;
 
     } catch (error) {
       logger.error('AIService.attemptAutoComplete', 'Failed to auto-complete task', { error });
+      throw error;
+    }
+  }
+
+  private async getTasks(userId: string): Promise<Task[]> {
+    try {
+      return await taskService.getTasks(userId);
+    } catch (error) {
+      logger.error('AIService.getTasks', 'Failed to fetch tasks', { error });
       throw error;
     }
   }
