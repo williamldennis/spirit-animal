@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Modal, TouchableOpacity, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { AIAssistant } from './AIAssistant';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAIStore } from '../stores/aiStore';
 
 type Props = {
   visible: boolean;
@@ -10,13 +11,19 @@ type Props = {
 
 export const AIBottomSheet = ({ visible, onClose }: Props) => {
   const insets = useSafeAreaInsets();
+  const { response, clearAIResponse } = useAIStore();
+
+  const handleClose = () => {
+    clearAIResponse();
+    onClose();
+  };
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -32,14 +39,23 @@ export const AIBottomSheet = ({ visible, onClose }: Props) => {
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>🦊 Spirit Animal</Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={handleClose}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
 
           {/* AI Assistant */}
           <View style={styles.content}>
-            <AIAssistant />
+            {response ? (
+              <View style={styles.responseContainer}>
+                <Text style={styles.responseText}>{response.text}</Text>
+                {response.confirmation && (
+                  <Text style={styles.confirmationText}>{response.confirmation}</Text>
+                )}
+              </View>
+            ) : (
+              <AIAssistant />
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -88,5 +104,18 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  responseContainer: {
+    padding: 16,
+  },
+  responseText: {
+    fontSize: 16,
+    color: '#111827',
+    marginBottom: 8,
+  },
+  confirmationText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontStyle: 'italic',
   },
 }); 

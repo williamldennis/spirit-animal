@@ -732,6 +732,94 @@ ${task.description ? `Additional context: ${task.description}` : ''}`;
   public async expandTaskIntoSubtasks(task: Task): Promise<AIResponse> {
     return this.breakdownTask(task);
   }
+
+  public async attemptAutoComplete(task: Task): Promise<AIResponse> {
+    try {
+      const systemPrompt = `You are an AI assistant that can complete certain types of tasks. 
+      
+Current capabilities:
+- Send emails
+- Create calendar events
+- Set reminders
+- Make simple calculations
+- Format text
+- Generate lists
+- Basic data analysis
+
+When asked to complete a task:
+1. Analyze if the task is within your capabilities
+2. If yes, complete the task and provide the output
+3. If no, politely explain that you haven't learned to complete this type of task yet
+
+Task to analyze: "${task.title}"
+${task.description ? `Additional context: ${task.description}` : ''}`;
+
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          {
+            role: "user",
+            content: `Can you complete this task: ${task.title}?`
+          }
+        ],
+        functions: [
+          {
+            name: "complete_task",
+            description: "Complete the task if possible",
+            parameters: {
+              type: "object",
+              properties: {
+                canComplete: {
+                  type: "boolean",
+                  description: "Whether the AI can complete this task"
+                },
+                output: {
+                  type: "string",
+                  description: "The result or output of completing the task"
+                },
+                reason: {
+                  type: "string",
+                  description: "Explanation of why the task can or cannot be completed"
+                }
+              },
+              required: ["canComplete", "reason"]
+            }
+          }
+        ],
+        function_call: { name: "complete_task" }
+      });
+
+      const aiMessage = response.choices[0]?.message;
+
+      if (!aiMessage?.function_call) {
+        throw new Error('No response from AI');
+      }
+
+      const parameters = JSON.parse(aiMessage.function_call.arguments);
+      
+      if (parameters.canComplete) {
+        return {
+          text: parameters.output || 'Task completed successfully',
+          completed: true,
+          confirmation: `I've completed the task: "${task.title}"\n\n${parameters.output}`
+        };
+      } else {
+        return {
+          text: "I haven't learned to complete this task yet.",
+          completed: false,
+          confirmation: parameters.reason
+        };
+      }
+
+    } catch (error) {
+      logger.error('AIService.attemptAutoComplete', 'Failed to auto-complete task', { error });
+      throw error;
+    }
+  }
 }
 
 // Create and export a single instance

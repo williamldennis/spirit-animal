@@ -17,6 +17,9 @@ import EditTaskModal from './EditTaskModal';
 import type { Task } from '../types';
 import type { Timestamp } from 'firebase/firestore';
 import { aiService } from '../../ai/services/aiService';
+import { useAIStore } from '../../ai/stores/aiStore';
+import { useBottomSheet } from '../../shared/hooks/useBottomSheet';
+import { AIBottomSheet } from '../../ai/components/AIBottomSheet';
 
 type TaskSection = {
   title: string;
@@ -30,6 +33,10 @@ export default function TaskList() {
   const user = useAuthStore(state => state.user);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [expandingTask, setExpandingTask] = useState<string | null>(null);
+  const { showAIBottomSheet } = useBottomSheet();
+  const { setAIResponse } = useAIStore();
+  const isAIBottomSheetVisible = useBottomSheet((state) => state.isAIBottomSheetVisible);
+  const hideAIBottomSheet = useBottomSheet((state) => state.hideAIBottomSheet);
 
   const formatDueDate = (dueDate: string | Date | Timestamp | undefined) => {
     if (!dueDate) return '';
@@ -199,6 +206,43 @@ export default function TaskList() {
     }
   };
 
+  const handleAutoCompleteTask = async (task: Task) => {
+    if (expandingTask === task.id) return;
+    
+    try {
+      setExpandingTask(task.id);
+      logger.debug('TaskList.handleAutoCompleteTask', 'Attempting to auto-complete task', { 
+        taskId: task.id,
+        title: task.title 
+      });
+
+      const response = await aiService.attemptAutoComplete(task);
+      
+      // Show the AI's response in the bottom sheet
+      setAIResponse(response);
+      showAIBottomSheet();
+
+      if (response.completed) {
+        // Task was completed automatically
+        await taskService.toggleTaskComplete(task.id, true);
+        logger.debug('TaskList.handleAutoCompleteTask', 'Task completed successfully', {
+          taskId: task.id,
+          response
+        });
+      } else {
+        logger.debug('TaskList.handleAutoCompleteTask', 'Task could not be completed', {
+          taskId: task.id,
+          reason: response.confirmation
+        });
+      }
+    } catch (error) {
+      logger.error('TaskList.handleAutoCompleteTask', 'Failed to auto-complete task', { error });
+      Alert.alert('Error', 'Failed to process task. Please try again.');
+    } finally {
+      setExpandingTask(null);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -267,7 +311,19 @@ export default function TaskList() {
                   </Text>
                   
                   <View style={styles.taskActions}>
-                    {!isSubtask && ( // Only show fox button for parent tasks
+                    {isSubtask ? (
+                      <TouchableOpacity 
+                        onPress={() => handleAutoCompleteTask(item)}
+                        disabled={expandingTask === item.id}
+                        style={styles.autoCompleteButton}
+                      >
+                        {expandingTask === item.id ? (
+                          <ActivityIndicator size="small" color="#2563EB" />
+                        ) : (
+                          <Text style={styles.autoCompleteButtonText}>🪄</Text>
+                        )}
+                      </TouchableOpacity>
+                    ) : (
                       <TouchableOpacity 
                         onPress={() => handleExpandTask(item)}
                         disabled={expandingTask === item.id}
@@ -306,6 +362,11 @@ export default function TaskList() {
           task={editingTask}
         />
       )}
+
+      <AIBottomSheet 
+        visible={isAIBottomSheetVisible}
+        onClose={hideAIBottomSheet}
+      />
     </View>
   );
 }
@@ -412,5 +473,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  autoCompleteButton: {
+    padding: 4,
+    marginLeft: 'auto',
+  },
+  autoCompleteButtonText: {
+    fontSize: 16,
   },
 }); 
