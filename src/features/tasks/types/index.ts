@@ -3,7 +3,7 @@ import type { Timestamp } from 'firebase/firestore';
 export interface Task {
   id: string;
   title: string;
-  description?: string;
+  criteria?: string;
   completed: boolean;
   dueDate?: Timestamp;
   priority?: 'low' | 'medium' | 'high';

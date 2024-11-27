@@ -25,14 +25,14 @@ type Props = {
 
 export default function EditTaskModal({ visible, onClose, task }: Props) {
   const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description || '');
+  const [criteria, setCriteria] = useState(task.criteria || '');
   const [dueDate, setDueDate] = useState(task.dueDate || new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setTitle(task.title);
-    setDescription(task.description || '');
+    setCriteria(task.criteria || '');
     setDueDate(task.dueDate || new Date());
   }, [task]);
 
@@ -43,7 +43,7 @@ export default function EditTaskModal({ visible, onClose, task }: Props) {
     try {
       await taskService.updateTask(task.id, {
         title: title.trim(),
-        description: description.trim(),
+        criteria: criteria.trim(),
         dueDate: showDatePicker ? dueDate : undefined,
       });
 
@@ -83,9 +83,9 @@ export default function EditTaskModal({ visible, onClose, task }: Props) {
               />
 
               <SafeTextInput
-                placeholder="Description (optional)"
-                value={description}
-                onChangeText={setDescription}
+                placeholder="Task criteria (optional)"
+                value={criteria}
+                onChangeText={setCriteria}
                 multiline
                 numberOfLines={3}
                 maxLength={500}

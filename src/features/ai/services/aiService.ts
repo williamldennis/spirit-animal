@@ -642,9 +642,10 @@ Guidelines for breaking down tasks:
 - Consider prerequisites and dependencies
 - Focus on practical, achievable steps
 - Keep steps concise but descriptive
+- Ensure all criteria are addressed in the subtasks
 
 Current task to breakdown: "${task.title}"
-${task.description ? `Additional context: ${task.description}` : ''}`;
+${task.criteria ? `Required Criteria:\n${task.criteria}` : ''}`;
 
       const response = await this.openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -783,10 +784,11 @@ ${result?.content ? `Generated Content: ${JSON.stringify(result.content, null, 2
       const systemPrompt = `You are an advanced AI executive assistant with comprehensive capabilities. You have access to the following context:
 
 ${parentTask ? `Parent Task: "${parentTask.title}"
-${parentTask.description ? `Parent Task Description: ${parentTask.description}` : ''}` : ''}
+${parentTask.criteria ? `Required Criteria:\n${parentTask.criteria}` : ''}` : ''}
 
 ${contextualTasks.length > 0 ? `Related Subtasks:
-${contextualTasks.map(t => `- ${t.title}${t.completed ? ' (Completed)' : ''}`).join('\n')}` : ''}
+${contextualTasks.map(t => `- ${t.title}${t.completed ? ' (Completed)' : ''}
+  ${t.criteria ? `  Criteria: ${t.criteria}` : ''}`).join('\n')}` : ''}
 
 ${completedSubtaskResults}
 
@@ -796,105 +798,16 @@ Guidelines for Task Completion:
 3. Clearly state any assumptions made
 4. Suggest areas that might need refinement
 5. Be ready to modify the solution based on user feedback
+6. Ensure all specified criteria are met
 
-For example:
-- When planning a menu: Start with standard portions and common dietary options
-- When creating guest lists: Begin with a template for different group sizes
-- When scheduling: Propose typical time slots that can be adjusted
-- When budgeting: Use average costs that can be refined
+Current Task: "${task.title}"
+${task.criteria ? `Required Criteria:\n${task.criteria}` : ''}
 
-Core Executive Assistant Capabilities:
-1. Planning & Organization
-   - Create detailed project plans and timelines
-   - Break down complex tasks into actionable steps
-   - Organize and prioritize tasks
-   - Create schedules and agendas
-
-2. Event Planning
-   - Plan meetings, parties, and events
-   - Create guest lists and seating arrangements
-   - Coordinate catering and vendors
-   - Design event timelines
-   - Manage RSVPs and attendance
-
-3. Travel Planning
-   - Create travel itineraries
-   - Research flights and accommodations
-   - Plan transportation logistics
-   - Create packing lists
-   - Suggest activities and dining options
-
-4. Documentation & Communication
-   - Draft emails and messages
-   - Create professional documents
-   - Format reports and presentations
-   - Write meeting minutes and summaries
-   - Compose invitations and announcements
-
-5. Research & Analysis
-   - Conduct market research
-   - Compare products and services
-   - Analyze data and create summaries
-   - Research venues and vendors
-   - Find and verify information
-
-6. Food & Dining
-   - Plan menus for various occasions
-   - Create detailed shopping lists
-   - Calculate portions and ingredients
-   - Suggest wine pairings
-   - Plan meal prep schedules
-
-7. Budget & Finance
-   - Create basic budgets
-   - Track expenses
-   - Calculate costs and estimates
-   - Compare prices
-   - Suggest cost-saving measures
-
-8. Home & Life Management
-   - Create cleaning schedules
-   - Plan home maintenance tasks
-   - Organize spaces and storage
-   - Create inventory lists
-   - Plan daily routines
-
-9. Gift & Shopping
-   - Create gift ideas and suggestions
-   - Make shopping lists
-   - Compare products and prices
-   - Plan holiday shopping
-   - Track orders and deliveries
-
-10. Health & Wellness
-    - Plan workout schedules
-    - Create meal plans
-    - Track health goals
-    - Schedule medical appointments
-    - Create self-care routines
-
-Output Formats:
-- Structured lists and categories
-- Detailed timelines
-- Step-by-step instructions
-- Schedules and calendars
-- Budget spreadsheets
-- Menu plans
-- Travel itineraries
-- Shopping lists
-- Email drafts
-- Event plans
-
-When completing a task:
-1. Analyze the task and context thoroughly
-2. Consider all relevant capabilities and resources
-3. Provide detailed, actionable output
-4. Include specific recommendations and alternatives
-5. Consider timing, budget, and practical constraints
-6. Provide clear next steps or follow-up actions
-
-Current task: "${task.title}"
-${task.description ? `Task Description: ${task.description}` : ''}`;
+When completing this task:
+1. Review and address each criterion specifically
+2. Highlight how each requirement is being met
+3. Flag any criteria that need clarification
+4. Suggest additional criteria that might be helpful`;
 
       const response = await this.openai.chat.completions.create({
         model: "gpt-3.5-turbo",

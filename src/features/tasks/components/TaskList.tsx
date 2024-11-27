@@ -370,10 +370,10 @@ export default function TaskList() {
                   </View>
                 </View>
                 
-                {item.description && (
+                {item.criteria && (
                   <View>
-                    <Text style={styles.taskDescription} numberOfLines={2}>
-                      {item.description}
+                    <Text style={styles.taskCriteria} numberOfLines={2}>
+                      {item.criteria}
                     </Text>
                     {item.completed && isSubtask && (
                       <Pressable 
@@ -530,5 +530,11 @@ const styles = StyleSheet.create({
     color: '#2563EB',
     fontSize: 14,
     textDecorationLine: 'underline',
+  },
+  taskCriteria: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 }); 

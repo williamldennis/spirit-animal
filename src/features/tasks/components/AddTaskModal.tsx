@@ -25,7 +25,7 @@ type Props = {
 
 export default function AddTaskModal({ visible, onClose }: Props) {
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [criteria, setCriteria] = useState('');
   const [dueDate, setDueDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,7 +38,7 @@ export default function AddTaskModal({ visible, onClose }: Props) {
     try {
       await taskService.createTask(user.uid, {
         title: title.trim(),
-        description: description.trim(),
+        criteria: criteria.trim(),
         dueDate: showDatePicker ? dueDate : undefined,
         completed: false,
       });
@@ -46,7 +46,7 @@ export default function AddTaskModal({ visible, onClose }: Props) {
       logger.info('AddTaskModal', 'Task created successfully');
       onClose();
       setTitle('');
-      setDescription('');
+      setCriteria('');
       setDueDate(new Date());
     } catch (error) {
       logger.error('AddTaskModal', 'Failed to create task', { error });
@@ -83,9 +83,9 @@ export default function AddTaskModal({ visible, onClose }: Props) {
               />
 
               <SafeTextInput
-                placeholder="Description (optional)"
-                value={description}
-                onChangeText={setDescription}
+                placeholder="Task criteria (optional)"
+                value={criteria}
+                onChangeText={setCriteria}
                 multiline
                 numberOfLines={3}
                 maxLength={500}
