@@ -5,6 +5,8 @@ import { logger } from '../../../utils/logger';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { addDays } from 'date-fns';
+import { CalendarCredentials } from '../types';
+import { useAuthStore } from '../../auth/stores/authStore';
 
 export interface CalendarEventResponse {
   id: string;
@@ -46,7 +48,7 @@ class CalendarService {
     this.googleAuth = auth;
   }
 
-  async connectGoogleCalendar(userId: string) {
+  async connectGoogleCalendar(userId: string): Promise<boolean> {
     try {
       logger.info('CalendarService.connectGoogleCalendar', 'Starting connection');
 
@@ -72,15 +74,17 @@ class CalendarService {
           expiresIn
         });
 
-        await this.storeCalendarTokens(userId, {
+        const credentials: CalendarCredentials = {
           accessToken,
-          expiresAt: new Date(Date.now() + (expiresIn || 3600) * 1000)
-        });
+          refreshToken: '', // We'll need to handle refresh tokens separately
+          expiresAt: new Date(Date.now() + (expiresIn || 3600) * 1000).toISOString(),
+          scope: response.authentication.scope || ''
+        };
+
+        await this.saveCalendarCredentials(userId, credentials);
 
         // Test API connection
         const testUrl = 'https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1';
-        logger.debug('CalendarService.connectGoogleCalendar', 'Testing API connection', { testUrl });
-
         const testResponse = await fetch(testUrl, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -89,35 +93,16 @@ class CalendarService {
         });
 
         if (!testResponse.ok) {
-          const errorData = await testResponse.json();
-          logger.error('CalendarService.connectGoogleCalendar', 'API test failed', { 
-            status: testResponse.status,
-            error: errorData 
-          });
-          throw new Error(`Calendar API test failed: ${errorData.error?.message || 'Unknown error'}`);
+          throw new Error('Calendar API test failed');
         }
 
-        const testData = await testResponse.json();
-        logger.debug('CalendarService.connectGoogleCalendar', 'API test successful', {
-          hasItems: !!testData.items?.length,
-          itemCount: testData.items?.length || 0
-        });
-
+        logger.debug('CalendarService.connectGoogleCalendar', 'Connection successful');
         return true;
       }
 
-      logger.warn('CalendarService.connectGoogleCalendar', 'No valid token found', {
-        type: result.type,
-        hasResponse: !!response,
-        hasAuth: !!response?.authentication
-      });
       return false;
-
     } catch (error) {
-      logger.error('CalendarService.connectGoogleCalendar', 'Connection error', { 
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('CalendarService.connectGoogleCalendar', 'Connection error', { error });
       throw error;
     }
   }
@@ -447,6 +432,160 @@ class CalendarService {
       }
     } catch (error) {
       logger.error('CalendarService.deleteEvent', 'Failed to delete event', { error });
+      throw error;
+    }
+  }
+
+  private async saveCalendarCredentials(userId: string, credentials: CalendarCredentials) {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await setDoc(userRef, {
+        calendarCredentials: credentials
+      }, { merge: true });
+      
+      logger.debug('CalendarService.saveCalendarCredentials', 'Saved calendar credentials');
+    } catch (error) {
+      logger.error('CalendarService.saveCalendarCredentials', 'Failed to save credentials', { error });
+      throw error;
+    }
+  }
+
+  private async getCalendarCredentials(userId: string): Promise<CalendarCredentials | null> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) return null;
+      
+      const data = userDoc.data();
+      return data.calendarCredentials || null;
+    } catch (error) {
+      logger.error('CalendarService.getCalendarCredentials', 'Failed to get credentials', { error });
+      throw error;
+    }
+  }
+
+  async isCalendarConnected(userId: string): Promise<boolean> {
+    try {
+      if (!userId) return false;
+
+      const credentials = await this.getCalendarCredentials(userId);
+      if (!credentials) return false;
+
+      const expiresAt = new Date(credentials.expiresAt);
+      const now = new Date();
+
+      logger.debug('CalendarService.isCalendarConnected', 'Checking token expiry', {
+        expiresAt: expiresAt.toISOString(),
+        now: now.toISOString(),
+        hasToken: !!credentials.accessToken,
+        isExpired: expiresAt < now
+      });
+
+      if (expiresAt < now && credentials.refreshToken) {
+        // Token is expired, try to refresh
+        await this.refreshAccessToken(userId, credentials.refreshToken);
+        return true;
+      }
+
+      return expiresAt > now && !!credentials.accessToken;
+    } catch (error) {
+      logger.error('CalendarService.isCalendarConnected', 'Failed to check calendar connection', { error });
+      return false;
+    }
+  }
+
+  private async refreshAccessToken(userId: string, refreshToken: string) {
+    try {
+      // Make request to Google's token endpoint
+      const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: ENV.GOOGLE_CLIENT_ID,
+          client_secret: ENV.GOOGLE_CLIENT_SECRET,
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to refresh token');
+      }
+
+      // Calculate new expiry time
+      const expiresAt = new Date();
+      expiresAt.setSeconds(expiresAt.getSeconds() + data.expires_in);
+
+      const credentials: CalendarCredentials = {
+        accessToken: data.access_token,
+        refreshToken: refreshToken, // Keep existing refresh token
+        expiresAt: expiresAt.toISOString(),
+        scope: data.scope
+      };
+
+      await this.saveCalendarCredentials(userId, credentials);
+      
+      logger.debug('CalendarService.refreshAccessToken', 'Successfully refreshed token');
+    } catch (error) {
+      logger.error('CalendarService.refreshAccessToken', 'Failed to refresh token', { error });
+      throw error;
+    }
+  }
+
+  async connectCalendar(userId: string): Promise<void> {
+    try {
+      if (!userId) throw new Error('User not authenticated');
+
+      // Your existing OAuth flow
+      const result = await authorize();
+      
+      if (result?.accessToken) {
+        const expiresAt = new Date();
+        expiresAt.setSeconds(expiresAt.getSeconds() + (result.expiresIn || 3600));
+
+        const credentials: CalendarCredentials = {
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken || '',
+          expiresAt: expiresAt.toISOString(),
+          scope: result.scope || ''
+        };
+
+        await this.saveCalendarCredentials(userId, credentials);
+      }
+    } catch (error) {
+      logger.error('CalendarService.connectCalendar', 'Failed to connect calendar', { error });
+      throw error;
+    }
+  }
+
+  // Update your existing methods to use the stored credentials
+  async createEvent(userId: string, eventData: any): Promise<void> {
+    try {
+      const credentials = await this.getCalendarCredentials(userId);
+      if (!credentials) throw new Error('Calendar not connected');
+
+      // Use the access token for the API request
+      const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${credentials.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create event');
+      }
+
+      logger.debug('CalendarService.createEvent', 'Event created successfully');
+    } catch (error) {
+      logger.error('CalendarService.createEvent', 'Failed to create event', { error });
       throw error;
     }
   }

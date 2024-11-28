@@ -10,4 +10,11 @@ export interface CalendarEvent {
     email: string;
     responseStatus: string;
   }>;
+}
+
+export interface CalendarCredentials {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string; // ISO date string
+  scope: string;
 } 

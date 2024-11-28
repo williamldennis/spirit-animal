@@ -5,6 +5,7 @@ import WeekCalendarView from '../components/WeekCalendarView';
 import { useAuthStore } from '../../../features/auth/stores/authStore';
 import type { CalendarEventResponse } from '../services/calendarService';
 import AddEventModal from '../components/AddEventModal';
+import { logger } from '../../../utils/logger';
 
 export const CalendarScreen = () => {
   const [events, setEvents] = useState<CalendarEventResponse[]>([]);
@@ -13,42 +14,63 @@ export const CalendarScreen = () => {
   const [loading, setLoading] = useState(true);
   const user = useAuthStore(state => state.user);
 
-  useEffect(() => {
-    const loadEvents = async () => {
-      if (user?.uid) {
-        try {
-          setLoading(true);
-          const connected = await calendarService.isCalendarConnected(user.uid);
-          setIsConnected(connected);
+  const loadEvents = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      setLoading(true);
+      const connected = await calendarService.isCalendarConnected(user.uid);
+      logger.debug('CalendarScreen.loadEvents', 'Calendar connection status', { connected });
+      setIsConnected(connected);
 
-          if (connected) {
-            const calendarEvents = await calendarService.fetchUpcomingEvents(user.uid, 30);
-            console.log('Fetched calendar events:', calendarEvents);
-            setEvents(calendarEvents);
-          }
-        } catch (error) {
-          console.error('Failed to load calendar events:', error);
-        } finally {
-          setLoading(false);
-        }
+      if (connected) {
+        const calendarEvents = await calendarService.fetchUpcomingEvents(user.uid, 30);
+        logger.debug('CalendarScreen.loadEvents', 'Fetched events', { 
+          count: calendarEvents.length,
+          sampleEvent: calendarEvents[0]?.summary 
+        });
+        setEvents(calendarEvents);
       }
-    };
+    } catch (error) {
+      logger.error('CalendarScreen.loadEvents', 'Failed to load events', { error });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadEvents();
+    const interval = setInterval(loadEvents, 30000);
+    return () => clearInterval(interval);
   }, [user?.uid]);
+
+  const handleConnectCalendar = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      setLoading(true);
+      const success = await calendarService.connectGoogleCalendar(user.uid);
+      logger.debug('CalendarScreen.handleConnectCalendar', 'Connection result', { success });
+      
+      if (success) {
+        await loadEvents();
+      }
+    } catch (error) {
+      logger.error('CalendarScreen.handleConnectCalendar', 'Failed to connect calendar', { error });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddEventClose = async () => {
+    setShowAddEvent(false);
+    await loadEvents();
+  };
 
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color="#2563EB" />
-      </View>
-    );
-  }
-
-  if (events.length === 0 && isConnected) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.message}>No events found</Text>
       </View>
     );
   }
@@ -59,7 +81,7 @@ export const CalendarScreen = () => {
         <Text style={styles.message}>Calendar not connected</Text>
         <TouchableOpacity 
           style={styles.connectButton}
-          onPress={() => calendarService.connectGoogleCalendar(user?.uid || '')}
+          onPress={handleConnectCalendar}
         >
           <Text style={styles.connectButtonText}>Connect Google Calendar</Text>
         </TouchableOpacity>
@@ -69,14 +91,11 @@ export const CalendarScreen = () => {
 
   return (
     <View style={styles.container}>
-      <WeekCalendarView 
-        events={events} 
-        daysToShow={30} 
-      />
+      <WeekCalendarView events={events} daysToShow={30} />
       
       <AddEventModal 
         visible={showAddEvent} 
-        onClose={() => setShowAddEvent(false)}
+        onClose={handleAddEventClose}
       />
     </View>
   );
@@ -107,7 +126,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
-  },
+  }
 });
 
 export default CalendarScreen; 
