@@ -10,7 +10,7 @@ export interface AIMessage {
 }
 
 export interface AIAction {
-  type: 'create_task' | 'send_message' | 'create_event' | 'update_event';
+  type: 'create_task' | 'send_message' | 'create_event' | 'update_event' | 'web_search' | 'browse_webpage' | 'search_flights';
   parameters: any;
 }
 
@@ -41,4 +41,28 @@ export interface AIState {
 export interface MessageContext {
   role: "user" | "assistant";
   content: string;
+}
+
+export interface WebSearchParameters {
+  query: string;
+  results: {
+    title: string;
+    url: string;
+    snippet: string;
+  }[];
+}
+
+export interface WebBrowseParameters {
+  url: string;
+  content: string;
+}
+
+export interface FlightSearchParameters {
+  from: string;
+  to: string;
+  departureDate: string;
+  returnDate?: string;
+  passengers?: number;
+  cabinClass?: 'economy' | 'premium_economy' | 'business' | 'first';
+  results?: FlightOption[];
 } 

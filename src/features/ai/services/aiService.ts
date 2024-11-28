@@ -22,6 +22,8 @@ import { taskService } from '../../tasks/services/taskService';
 import { Timestamp } from 'firebase/firestore';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { useAIStore } from '../../ai/stores/aiStore';
+import { webBrowsingService } from './webBrowsingService';
+import { flightSearchService, FlightSearchParams } from './flightSearchService';
 
 interface MessageContext {
   role: 'user' | 'assistant';
@@ -164,6 +166,77 @@ Be concise and direct.`;
               },
               required: ["summary", "start", "end"]
             }
+          },
+          {
+            name: "web_search",
+            description: "Search the internet for information",
+            parameters: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "Search query"
+                },
+                numResults: {
+                  type: "number",
+                  description: "Number of results to return (max 10)",
+                  default: 5
+                }
+              },
+              required: ["query"]
+            }
+          },
+          {
+            name: "browse_webpage",
+            description: "Fetch and read content from a specific webpage",
+            parameters: {
+              type: "object",
+              properties: {
+                url: {
+                  type: "string",
+                  description: "URL of the webpage to browse"
+                }
+              },
+              required: ["url"]
+            }
+          },
+          {
+            name: "search_flights",
+            description: "Search for available flights",
+            parameters: {
+              type: "object",
+              properties: {
+                from: {
+                  type: "string",
+                  description: "Departure city or airport code"
+                },
+                to: {
+                  type: "string",
+                  description: "Destination city or airport code"
+                },
+                departureDate: {
+                  type: "string",
+                  format: "date",
+                  description: "Departure date (YYYY-MM-DD)"
+                },
+                returnDate: {
+                  type: "string",
+                  format: "date",
+                  description: "Return date for round trips (YYYY-MM-DD)"
+                },
+                passengers: {
+                  type: "number",
+                  description: "Number of passengers",
+                  default: 1
+                },
+                cabinClass: {
+                  type: "string",
+                  enum: ["economy", "premium_economy", "business", "first"],
+                  description: "Preferred cabin class"
+                }
+              },
+              required: ["from", "to", "departureDate"]
+            }
           }
         ],
         function_call: "auto"
@@ -211,6 +284,94 @@ Be concise and direct.`;
             text: aiMessage.content || 'Creating your event...',
             confirmation: this.getActionConfirmation(action),
             action
+          };
+        } else if (functionCall.name === 'web_search') {
+          const searchResults = await webBrowsingService.search(
+            parameters.query
+          );
+          
+          // Send search results back to AI for processing
+          const searchResponse = await this.openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+              ...messages,
+              {
+                role: "function",
+                name: "web_search",
+                content: JSON.stringify(searchResults)
+              }
+            ]
+          });
+
+          return {
+            text: searchResponse.choices[0]?.message?.content || 'No results found',
+            action: {
+              type: 'web_search',
+              parameters: {
+                query: parameters.query,
+                results: searchResults
+              }
+            }
+          };
+        } else if (functionCall.name === 'browse_webpage') {
+          const pageContent = await webBrowsingService.fetchWebPage(
+            parameters.url
+          );
+
+          // Send page content back to AI for processing
+          const browseResponse = await this.openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+              ...messages,
+              {
+                role: "function",
+                name: "browse_webpage",
+                content: pageContent
+              }
+            ]
+          });
+
+          return {
+            text: browseResponse.choices[0]?.message?.content || 'Failed to process webpage',
+            action: {
+              type: 'browse_webpage',
+              parameters: {
+                url: parameters.url,
+                content: pageContent.substring(0, 200) + '...' // Preview only
+              }
+            }
+          };
+        } else if (functionCall.name === 'search_flights') {
+          const flightOptions = await flightSearchService.searchFlights(parameters);
+          const recommendedFlights = flightSearchService.getRecommendedFlights(flightOptions);
+
+          const flightResults = recommendedFlights.map(flight => `
+✈️ ${flight.airline} ${flight.flightNumber || ''}
+💺 ${parameters.cabinClass || 'economy'} class
+🛫 Depart: ${flight.departureTime} ${flight.terminal ? `(${flight.terminal})` : ''}
+🛬 Arrive: ${flight.arrivalTime}
+⏱️ Duration: ${flight.duration}
+✈️ Aircraft: ${flight.aircraft || 'Various'}
+${flight.stops === 0 ? '✅ Nonstop' : `🛑 ${flight.stops} stop${flight.stops > 1 ? 's' : ''}`}
+
+💰 Price Breakdown:
+  Base Fare: $${flight.priceBreakdown?.base || flight.price}
+  Taxes & Fees: $${flight.priceBreakdown?.taxes || 'Varies'}
+  Total: ${flight.price}
+
+🔗 Book here: ${flight.link}
+  `).join('\n\n───────────────\n\n');
+
+          return {
+            text: `Here are the best flight options I found for ${parameters.from} to ${parameters.to} on ${parameters.departureDate}:\n\n${flightResults}`,
+            action: {
+              type: 'search_flights',
+              parameters: {
+                ...parameters,
+                results: recommendedFlights
+              }
+            },
+            confirmation: `I've found ${recommendedFlights.length} flight options for your trip, sorted by stops and price.`
           };
         }
       }
