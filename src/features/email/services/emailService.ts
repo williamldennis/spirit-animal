@@ -4,38 +4,32 @@ import { logger } from '../../../utils/logger';
 import { Email, EmailCredentials, SendEmailParams } from '../types';
 import { ENV } from '../../../config/env';
 import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
+
+WebBrowser.maybeCompleteAuthSession();
 
 class EmailService {
   private readonly GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
+  private readonly SCOPES = [
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.modify'
+  ];
 
-  async connectGmail(userId: string): Promise<boolean> {
+  async connectGmail(userId: string, accessToken: string): Promise<boolean> {
     try {
       logger.info('EmailService.connectGmail', 'Starting Gmail connection');
+      
+      const credentials: EmailCredentials = {
+        accessToken,
+        refreshToken: '', // We'll handle refresh tokens later if needed
+        expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(), // 1 hour from now
+        scope: this.SCOPES.join(' ')
+      };
 
-      const [_, response] = await Google.useAuthRequest({
-        clientId: ENV.GOOGLE_CLIENT_ID,
-        scopes: [
-          'https://www.googleapis.com/auth/gmail.readonly',
-          'https://www.googleapis.com/auth/gmail.send',
-          'https://www.googleapis.com/auth/gmail.modify'
-        ],
-      });
-
-      if (response?.authentication?.accessToken) {
-        const { accessToken, expiresIn } = response.authentication;
-        
-        const credentials: EmailCredentials = {
-          accessToken,
-          refreshToken: '', // We'll need to handle refresh tokens separately
-          expiresAt: new Date(Date.now() + (expiresIn || 3600) * 1000).toISOString(),
-          scope: response.authentication.scope || ''
-        };
-
-        await this.saveEmailCredentials(userId, credentials);
-        return true;
-      }
-
-      return false;
+      await this.saveEmailCredentials(userId, credentials);
+      return true;
     } catch (error) {
       logger.error('EmailService.connectGmail', 'Connection failed', { error });
       throw error;
@@ -76,7 +70,7 @@ class EmailService {
 
       // Fetch full details for each email
       for (const message of data.messages) {
-        const emailData = await this.fetchEmailDetails(credentials.accessToken, message.id);
+        const emailData = await this.fetchEmailDetails(userId, message.id);
         if (emailData) emails.push(emailData);
       }
 
@@ -87,13 +81,16 @@ class EmailService {
     }
   }
 
-  private async fetchEmailDetails(accessToken: string, messageId: string): Promise<Email | null> {
+  async fetchEmailDetails(userId: string, messageId: string): Promise<Email | null> {
     try {
+      const credentials = await this.getEmailCredentials(userId);
+      if (!credentials?.accessToken) throw new Error('Gmail not connected');
+
       const response = await fetch(
         `${this.GMAIL_API_BASE}/messages/${messageId}`,
         {
           headers: {
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${credentials.accessToken}`,
           },
         }
       );
@@ -105,6 +102,7 @@ class EmailService {
       // Parse email data
       const headers = data.payload.headers;
       const from = headers.find((h: any) => h.name === 'From')?.value || '';
+      const to = headers.find((h: any) => h.name === 'To')?.value?.split(',').map((e: string) => e.trim()) || [];
       const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
       const date = headers.find((h: any) => h.name === 'Date')?.value || '';
       
@@ -115,7 +113,7 @@ class EmailService {
         id: data.id,
         threadId: data.threadId,
         from,
-        to: [],  // Parse 'To' header if needed
+        to,
         subject,
         body,
         snippet: data.snippet,
@@ -149,6 +147,29 @@ class EmailService {
   private decodeBase64Url(base64Url: string): string {
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     return atob(base64);
+  }
+
+  private async saveEmailCredentials(userId: string, credentials: EmailCredentials) {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await setDoc(userRef, {
+        emailCredentials: credentials
+      }, { merge: true });
+    } catch (error) {
+      logger.error('EmailService.saveEmailCredentials', 'Save failed', { error });
+      throw error;
+    }
+  }
+
+  private async getEmailCredentials(userId: string): Promise<EmailCredentials | null> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      return userDoc.data()?.emailCredentials || null;
+    } catch (error) {
+      logger.error('EmailService.getEmailCredentials', 'Fetch failed', { error });
+      throw error;
+    }
   }
 
   async sendEmail(userId: string, params: SendEmailParams): Promise<boolean> {
@@ -192,29 +213,6 @@ class EmailService {
       '',
       body
     ].join('\r\n');
-  }
-
-  private async saveEmailCredentials(userId: string, credentials: EmailCredentials) {
-    try {
-      const userRef = doc(db, 'users', userId);
-      await setDoc(userRef, {
-        emailCredentials: credentials
-      }, { merge: true });
-    } catch (error) {
-      logger.error('EmailService.saveEmailCredentials', 'Save failed', { error });
-      throw error;
-    }
-  }
-
-  private async getEmailCredentials(userId: string): Promise<EmailCredentials | null> {
-    try {
-      const userRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userRef);
-      return userDoc.data()?.emailCredentials || null;
-    } catch (error) {
-      logger.error('EmailService.getEmailCredentials', 'Fetch failed', { error });
-      throw error;
-    }
   }
 }
 

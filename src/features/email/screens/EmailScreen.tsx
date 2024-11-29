@@ -14,6 +14,8 @@ import { emailService } from '../services/emailService';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { Email } from '../types';
 import { format } from 'date-fns';
+import ConnectGmailButton from '../components/ConnectGmailButton';
+import { logger } from '../../../utils/logger';
 
 export default function EmailScreen() {
   const [emails, setEmails] = useState<Email[]>([]);
@@ -31,13 +33,15 @@ export default function EmailScreen() {
     
     try {
       const connected = await emailService.isGmailConnected(user.uid);
+      logger.debug('EmailScreen', 'Gmail connection status', { connected });
       setIsConnected(connected);
+      setLoading(false);
       
       if (connected) {
         loadEmails();
       }
     } catch (error) {
-      console.error('Failed to check Gmail connection:', error);
+      logger.error('EmailScreen', 'Failed to check Gmail connection', { error });
       setLoading(false);
     }
   };
@@ -97,12 +101,12 @@ export default function EmailScreen() {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.message}>Connect your Gmail account to get started</Text>
-        <TouchableOpacity
-          style={styles.connectButton}
-          onPress={handleConnectGmail}
-        >
-          <Text style={styles.connectButtonText}>Connect Gmail</Text>
-        </TouchableOpacity>
+        <ConnectGmailButton 
+          onSuccess={() => {
+            setIsConnected(true);
+            loadEmails();
+          }} 
+        />
       </View>
     );
   }
@@ -136,6 +140,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: 'white',
   },
   message: {
     fontSize: 16,

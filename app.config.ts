@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const REVERSED_CLIENT_ID = GOOGLE_IOS_CLIENT_ID?.split('.').reverse().join('.');
+
 export default {
   expo: {
     name: 'spirit-animal',
@@ -20,7 +23,7 @@ export default {
       bundleIdentifier: 'com.willdennis.spiritanimal',
       config: {
         googleSignIn: {
-          reservedClientId: process.env.GOOGLE_IOS_CLIENT_ID
+          reservedClientId: REVERSED_CLIENT_ID
         }
       },
       infoPlist: {
@@ -28,7 +31,7 @@ export default {
         CFBundleURLTypes: [
           {
             CFBundleURLSchemes: [
-              'com.googleusercontent.apps.1042281418890-lf5ougfstfge53aausq1kgpkhm7id4m'
+              `com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID?.split('-')[0]}`
             ]
           }
         ]
@@ -55,8 +58,8 @@ export default {
       firebaseStorageBucket: process.env.FIREBASE_STORAGE_BUCKET,
       firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       firebaseAppId: process.env.FIREBASE_APP_ID,
-      googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID,
-      googleIosClientId: process.env.GOOGLE_IOS_CLIENT_ID,
+      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
       openaiApiKey: process.env.OPENAI_API_KEY,
     },
     plugins: [
@@ -68,7 +71,7 @@ export default {
       ],
       "expo-dev-client"
     ],
-    scheme: 'com.googleusercontent.apps.1042281418890-lf5ougfstfge53aausq1kgpkhm7id4m',
+    scheme: `com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID?.split('-')[0]}`,
     experiments: {
       tsconfigPaths: true
     },

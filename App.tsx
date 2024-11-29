@@ -7,63 +7,72 @@ import { calendarService } from './src/features/calendar/services/calendarServic
 import { logger } from './src/utils/logger';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
-import type { AuthSessionResult } from 'expo-auth-session';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './src/config/firebase';
+import { useAuthStore } from './src/features/auth/stores/authStore';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// Define the exact redirect URI to match Google Console
-const REDIRECT_URI = Platform.select({
-  ios: 'com.googleusercontent.apps.1042281418890-lf5ougfstfge53aausq1kgpkhm7id4m:/',
-  android: 'com.willdennis.spiritanimal://oauth2redirect/google',
-  default: 'https://auth.expo.io/@willdennis/spirit-animal',
-});
-
-// Define scopes explicitly
-const CALENDAR_SCOPES = [
+// Define all required scopes
+const SCOPES = [
+  // Calendar scopes
   'https://www.googleapis.com/auth/calendar',
-  'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/calendar.events.readonly'
+  // Gmail scopes
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.modify'
 ];
 
 export default function App() {
+  const setUser = useAuthStore(state => state.setUser);
+  const [isInitialized, setIsInitialized] = React.useState(false);
+
+  // Initialize Google Auth
   const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: Constants.expoConfig?.extra?.googleWebClientId,
+    clientId: Constants.expoConfig?.extra?.googleWebClientId,
     iosClientId: Constants.expoConfig?.extra?.googleIosClientId,
-    scopes: CALENDAR_SCOPES,
+    scopes: SCOPES,
     selectAccount: true,
-    extraParams: {
-      access_type: 'offline',
-    }
   });
 
+  // Set up auth state listener
   React.useEffect(() => {
-    logger.debug('Google Auth Configuration', JSON.stringify({
-      platform: Platform.OS,
-      webClientId: Constants.expoConfig?.extra?.googleWebClientId?.substring(0, 8) + '...',
-      iosClientId: Constants.expoConfig?.extra?.googleIosClientId?.substring(0, 8) + '...',
-      configuredRedirectUri: REDIRECT_URI,
-      actualRedirectUri: request?.redirectUri,
-      scopes: request?.scopes,
-      responseType: request?.responseType,
-      usePKCE: request?.usePKCE
-    }));
+    logger.debug('App', 'Setting up auth state listener');
+    
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      logger.debug('App', 'Auth state changed', { 
+        isAuthenticated: !!user,
+        userId: user?.uid,
+        email: user?.email 
+      });
+      setUser(user);
+      setIsInitialized(true);
+    });
 
-    if (response?.type === 'success') {
-      logger.debug('Google Auth Success', JSON.stringify({
-        type: response.type,
-        authentication: response.authentication ? {
-          accessToken: response.authentication.accessToken?.substring(0, 8) + '...',
-          scopes: response.authentication.scope?.split(' '),
-          expiresIn: response.authentication.expiresIn
-        } : 'missing'
-      }));
+    return () => {
+      logger.debug('App', 'Cleaning up auth state listener');
+      unsubscribe();
+    };
+  }, []);
+
+  // Share Google auth with calendar service
+  React.useEffect(() => {
+    if (request) {
+      calendarService.setGoogleAuth([request, response, promptAsync]);
+      logger.debug('App', 'Google Auth Configuration', {
+        platform: Platform.OS,
+        hasWebClientId: !!Constants.expoConfig?.extra?.googleWebClientId,
+        hasIosClientId: !!Constants.expoConfig?.extra?.googleIosClientId,
+        scopes: SCOPES,
+      });
     }
   }, [request, response]);
 
-  React.useEffect(() => {
-    calendarService.setGoogleAuth([request, response, promptAsync]);
-  }, [request, response, promptAsync]);
+  if (!isInitialized) {
+    logger.debug('App', 'Still initializing...');
+    return null;
+  }
 
   return (
     <SafeAreaProvider>

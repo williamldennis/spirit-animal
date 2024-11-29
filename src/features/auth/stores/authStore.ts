@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { authService } from '../services/authService';
+import type { User } from 'firebase/auth';
 
 interface AuthState {
-  user: any | null;
+  user: User | null;
   loading: boolean;
   error: string | null;
+  setUser: (user: User | null) => void;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -14,6 +16,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   loading: false,
   error: null,
+  setUser: (user) => set({ user }),
   signUp: async (email: string, password: string) => {
     set({ loading: true, error: null });
     try {

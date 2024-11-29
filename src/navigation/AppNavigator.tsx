@@ -19,6 +19,16 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function AppNavigator() {
   const user = useAuthStore(state => state.user);
 
+  // Add debug logging
+  React.useEffect(() => {
+    logger.debug('AppNavigator', 'Rendering with auth state', { 
+      isAuthenticated: !!user,
+      userId: user?.uid,
+      email: user?.email,
+      shouldShowAuth: !user,
+    });
+  }, [user]);
+
   return (
     <NavigationContainer>
       <Stack.Navigator 
@@ -27,7 +37,21 @@ export default function AppNavigator() {
           contentStyle: { backgroundColor: '#F9FAFB' }
         }}
       >
-        {user ? (
+        {!user ? (
+          // Auth stack
+          <>
+            <Stack.Screen 
+              name="SignIn" 
+              component={SignInScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
+              name="SignUp" 
+              component={SignUpScreen}
+              options={{ headerShown: false }}
+            />
+          </>
+        ) : (
           // Authenticated stack
           <>
             <Stack.Screen name="Home" component={HomeScreen} />
@@ -54,12 +78,6 @@ export default function AppNavigator() {
               component={EmailDetailScreen}
               options={{ title: 'Email' }}
             />
-          </>
-        ) : (
-          // Auth stack
-          <>
-            <Stack.Screen name="SignIn" component={SignInScreen} />
-            <Stack.Screen name="SignUp" component={SignUpScreen} />
           </>
         )}
       </Stack.Navigator>

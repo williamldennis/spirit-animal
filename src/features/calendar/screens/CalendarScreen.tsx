@@ -27,7 +27,10 @@ export const CalendarScreen = () => {
         const calendarEvents = await calendarService.fetchUpcomingEvents(user.uid, 30);
         logger.debug('CalendarScreen.loadEvents', 'Fetched events', { 
           count: calendarEvents.length,
-          sampleEvent: calendarEvents[0]?.summary 
+          sampleEvent: calendarEvents[0] ? {
+            summary: calendarEvents[0].summary,
+            start: calendarEvents[0].start
+          } : null
         });
         setEvents(calendarEvents);
       }

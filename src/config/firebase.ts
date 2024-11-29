@@ -2,21 +2,23 @@ import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
+import { logger } from '../utils/logger';
 
 const FIREBASE_CONFIG = {
-  apiKey: Constants.expoConfig?.extra?.firebaseApiKey,
-  authDomain: Constants.expoConfig?.extra?.firebaseAuthDomain,
-  projectId: Constants.expoConfig?.extra?.firebaseProjectId,
-  storageBucket: Constants.expoConfig?.extra?.firebaseStorageBucket,
-  messagingSenderId: Constants.expoConfig?.extra?.firebaseMessagingSenderId,
-  appId: Constants.expoConfig?.extra?.firebaseAppId,
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Validate config
-if (!FIREBASE_CONFIG.apiKey) {
-  throw new Error('Firebase configuration is missing. Please check your .env file.');
-}
+// Debug log Firebase config
+logger.debug('Firebase', 'Initializing with config', {
+  hasApiKey: !!FIREBASE_CONFIG.apiKey,
+  hasAuthDomain: !!FIREBASE_CONFIG.authDomain,
+  hasProjectId: !!FIREBASE_CONFIG.projectId,
+});
 
 // Initialize Firebase
 const app = initializeApp(FIREBASE_CONFIG);
@@ -28,5 +30,10 @@ const auth = initializeAuth(app, {
 
 // Initialize Firestore
 const db = getFirestore(app);
+
+logger.debug('Firebase', 'Initialization complete', {
+  hasAuth: !!auth,
+  hasDb: !!db,
+});
 
 export { auth, db }; 

@@ -76,7 +76,7 @@ export default function EmailDetailScreen() {
             style={styles.headerButton}
             onPress={() => navigation.navigate('ComposeEmail', { replyTo: email })}
           >
-            <Feather name="reply" size={24} color="#111827" />
+            <Feather name="corner-down-left" size={24} color="#111827" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerButton}
