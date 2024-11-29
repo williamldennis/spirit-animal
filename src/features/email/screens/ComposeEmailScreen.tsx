@@ -76,6 +76,16 @@ export default function ComposeEmailScreen() {
     }
   };
 
+  const getHeaderTitle = () => {
+    if (route.params?.replyTo) {
+      return 'Reply';
+    }
+    if (route.params?.forward) {
+      return 'Forward';
+    }
+    return 'New Message';
+  };
+
   return (
     <KeyboardAvoidingView 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -85,14 +95,16 @@ export default function ComposeEmailScreen() {
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
           style={styles.headerButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text style={styles.headerButtonText}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Message</Text>
+        <Text style={styles.headerTitle}>{getHeaderTitle()}</Text>
         <TouchableOpacity
           onPress={handleSend}
           disabled={sending}
           style={[styles.headerButton, sending && styles.headerButtonDisabled]}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           {sending ? (
             <ActivityIndicator size="small" color="#2563EB" />
@@ -144,12 +156,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    height: 56,
+    marginTop: 44, // Add top margin for iOS status bar
   },
   headerButton: {
-    padding: 8,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+    minHeight: 44,
   },
   headerButtonDisabled: {
     opacity: 0.5,
@@ -158,15 +180,15 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 16,
   },
-  sendButtonText: {
-    color: '#2563EB',
-    fontSize: 16,
-    fontWeight: '500',
-  },
   headerTitle: {
     fontSize: 16,
     fontWeight: '500',
     color: '#111827',
+  },
+  sendButtonText: {
+    color: '#2563EB',
+    fontSize: 16,
+    fontWeight: '500',
   },
   content: {
     flex: 1,
