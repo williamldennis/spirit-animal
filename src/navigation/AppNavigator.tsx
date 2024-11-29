@@ -7,6 +7,9 @@ import HomeScreen from '../features/home/screens/HomeScreen';
 import SelectContactScreen from '../features/chat/screens/SelectContactScreen';
 import ChatScreen from '../features/chat/screens/ChatScreen';
 import EventDetailScreen from '../features/calendar/screens/EventDetailScreen';
+import EmailScreen from '../features/email/screens/EmailScreen';
+import ComposeEmailScreen from '../features/email/screens/ComposeEmailScreen';
+import EmailDetailScreen from '../features/email/screens/EmailDetailScreen';
 import { RootStackParamList } from '../types/navigation';
 import { useAuthStore } from '../features/auth/stores/authStore';
 import { logger } from '../utils/logger';
@@ -40,6 +43,16 @@ export default function AppNavigator() {
               name="EventDetail" 
               component={EventDetailScreen} 
               options={{ title: 'Event Details' }} 
+            />
+            <Stack.Screen
+              name="ComposeEmail"
+              component={ComposeEmailScreen}
+              options={{ title: 'New Email' }}
+            />
+            <Stack.Screen
+              name="EmailDetail"
+              component={EmailDetailScreen}
+              options={{ title: 'Email' }}
             />
           </>
         ) : (

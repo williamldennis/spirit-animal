@@ -10,6 +10,7 @@ import TaskList from '../../tasks/components/TaskList';
 import AddTaskModal from '../../tasks/components/AddTaskModal';
 import { AIBottomSheet } from '../../ai/components/AIBottomSheet';
 import AddEventModal from '../../calendar/components/AddEventModal';
+import EmailScreen from '../../email/screens/EmailScreen';
 
 type TabType = {
   id: string;
@@ -20,7 +21,8 @@ type TabType = {
 const TABS: TabType[] = [
   { id: 'chat', icon: 'message-circle', label: 'Chat' },
   { id: 'calendar', icon: 'calendar', label: 'Calendar' },
-  { id: 'tasks', icon: 'check-square', label: 'Tasks' }
+  { id: 'tasks', icon: 'check-square', label: 'Tasks' },
+  { id: 'email', icon: 'mail', label: 'Email' }
 ];
 
 export default function HomeScreen() {
@@ -85,6 +87,25 @@ export default function HomeScreen() {
       );
     }
     
+    if (activeTab === 'email') {
+      return (
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => navigation.navigate('ComposeEmail')}
+          >
+            <Feather name="edit" size={24} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton}>
+            <Feather name="search" size={24} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton}>
+            <Feather name="more-vertical" size={24} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
     return null;
   };
 
@@ -104,6 +125,8 @@ export default function HomeScreen() {
             />
           </>
         );
+      case 'email':
+        return <EmailScreen />;
       default:
         return null;
     }
@@ -115,7 +138,8 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
           {activeTab === 'chat' ? 'Messages' : 
-           activeTab === 'calendar' ? 'Calendar' : 'Tasks'}
+           activeTab === 'calendar' ? 'Calendar' : 
+           activeTab === 'tasks' ? 'Tasks' : 'Email'}
         </Text>
         {renderHeaderRight()}
       </View>
