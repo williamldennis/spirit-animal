@@ -68,18 +68,21 @@ export default function EmailDetailScreen() {
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
           style={styles.headerButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Feather name="arrow-left" size={24} color="#111827" />
         </TouchableOpacity>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             onPress={() => navigation.navigate('ComposeEmail', { replyTo: email })}
           >
             <Feather name="corner-down-left" size={24} color="#111827" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             onPress={() => navigation.navigate('ComposeEmail', { forward: email })}
           >
             <Feather name="corner-up-right" size={24} color="#111827" />
@@ -130,15 +133,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    height: 56,
+    marginTop: 44,
   },
   headerButton: {
-    padding: 8,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+    minHeight: 44,
   },
   headerActions: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   content: {
     flex: 1,

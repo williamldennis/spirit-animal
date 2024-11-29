@@ -37,7 +37,7 @@ export default function HomeScreen() {
       return (
         <View style={styles.headerRight}>
           <TouchableOpacity 
-            style={styles.iconButton}
+            style={styles.headerButton}
             onPress={() => {
               logger.debug('HomeScreen', 'Navigating to SelectContact');
               navigation.navigate('SelectContact');
@@ -45,7 +45,7 @@ export default function HomeScreen() {
           >
             <Feather name="edit" size={24} color="#6B7280" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.headerButton}>
             <Feather name="more-vertical" size={24} color="#6B7280" />
           </TouchableOpacity>
         </View>
@@ -56,15 +56,15 @@ export default function HomeScreen() {
       return (
         <View style={styles.headerRight}>
           <TouchableOpacity 
-            style={styles.iconButton}
+            style={styles.headerButton}
             onPress={() => setShowAddEvent(true)}
           >
             <Feather name="plus" size={24} color="#2563EB" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.headerButton}>
             <Feather name="search" size={24} color="#6B7280" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.headerButton}>
             <Feather name="more-vertical" size={24} color="#6B7280" />
           </TouchableOpacity>
         </View>
@@ -75,12 +75,12 @@ export default function HomeScreen() {
       return (
         <View style={styles.headerRight}>
           <TouchableOpacity 
-            style={styles.iconButton}
+            style={styles.headerButton}
             onPress={() => setShowAddTask(true)}
           >
             <Feather name="plus" size={24} color="#6B7280" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.headerButton}>
             <Feather name="more-vertical" size={24} color="#6B7280" />
           </TouchableOpacity>
         </View>
@@ -91,15 +91,15 @@ export default function HomeScreen() {
       return (
         <View style={styles.headerRight}>
           <TouchableOpacity 
-            style={styles.iconButton}
+            style={styles.headerButton}
             onPress={() => navigation.navigate('ComposeEmail')}
           >
             <Feather name="edit" size={24} color="#6B7280" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.headerButton}>
             <Feather name="search" size={24} color="#6B7280" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.headerButton}>
             <Feather name="more-vertical" size={24} color="#6B7280" />
           </TouchableOpacity>
         </View>
@@ -209,6 +209,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    zIndex: 1,
   },
   headerTitle: {
     fontSize: 18,
@@ -217,10 +218,17 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  iconButton: {
+  headerButton: {
     padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 40,
+    minHeight: 40,
   },
   content: {
     flex: 1,
