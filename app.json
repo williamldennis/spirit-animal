@@ -2,10 +2,11 @@
   "expo": {
     "name": "spirit-animal",
     "slug": "spirit-animal",
+    "scheme": "com.willdennis.spiritanimal",
     "jsEngine": "hermes",
     "icon": "./assets/icon.png",
     "ios": {
-      "bundleIdentifier": "com.yourcompany.spiritanimal",
+      "bundleIdentifier": "com.willdennis.spiritanimal",
       "supportsTablet": true,
       "icon": "./assets/ios-icon.png",
       "adaptiveIcon": {

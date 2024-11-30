@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { calendarService } from '../services/calendarService';
 import WeekCalendarView from '../components/WeekCalendarView';
 import { useAuthStore } from '../../../features/auth/stores/authStore';
 import type { CalendarEventResponse } from '../services/calendarService';
 import AddEventModal from '../components/AddEventModal';
 import { logger } from '../../../utils/logger';
+import ConnectCalendarButton from '../components/ConnectCalendarButton';
 
 export const CalendarScreen = () => {
   const [events, setEvents] = useState<CalendarEventResponse[]>([]);
@@ -14,54 +15,43 @@ export const CalendarScreen = () => {
   const [loading, setLoading] = useState(true);
   const user = useAuthStore(state => state.user);
 
-  const loadEvents = async () => {
+  useEffect(() => {
+    checkConnection();
+  }, []);
+
+  const checkConnection = async () => {
     if (!user?.uid) return;
     
     try {
-      setLoading(true);
       const connected = await calendarService.isCalendarConnected(user.uid);
-      logger.debug('CalendarScreen.loadEvents', 'Calendar connection status', { connected });
+      logger.debug('CalendarScreen', 'Calendar connection status', { connected });
       setIsConnected(connected);
-
+      setLoading(false);
+      
       if (connected) {
-        const calendarEvents = await calendarService.fetchUpcomingEvents(user.uid, 30);
-        logger.debug('CalendarScreen.loadEvents', 'Fetched events', { 
-          count: calendarEvents.length,
-          sampleEvent: calendarEvents[0] ? {
-            summary: calendarEvents[0].summary,
-            start: calendarEvents[0].start
-          } : null
-        });
-        setEvents(calendarEvents);
+        loadEvents();
       }
     } catch (error) {
-      logger.error('CalendarScreen.loadEvents', 'Failed to load events', { error });
-    } finally {
+      logger.error('CalendarScreen', 'Failed to check calendar connection', { error });
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadEvents();
-    const interval = setInterval(loadEvents, 30000);
-    return () => clearInterval(interval);
-  }, [user?.uid]);
-
-  const handleConnectCalendar = async () => {
+  const loadEvents = async () => {
     if (!user?.uid) return;
     
     try {
-      setLoading(true);
-      const success = await calendarService.connectGoogleCalendar(user.uid);
-      logger.debug('CalendarScreen.handleConnectCalendar', 'Connection result', { success });
-      
-      if (success) {
-        await loadEvents();
-      }
+      const calendarEvents = await calendarService.fetchUpcomingEvents(user.uid, 30);
+      logger.debug('CalendarScreen.loadEvents', 'Fetched events', { 
+        count: calendarEvents.length,
+        sampleEvent: calendarEvents[0] ? {
+          summary: calendarEvents[0].summary,
+          start: calendarEvents[0].start
+        } : null
+      });
+      setEvents(calendarEvents);
     } catch (error) {
-      logger.error('CalendarScreen.handleConnectCalendar', 'Failed to connect calendar', { error });
-    } finally {
-      setLoading(false);
+      logger.error('CalendarScreen.loadEvents', 'Failed to load events', { error });
     }
   };
 
@@ -81,13 +71,13 @@ export const CalendarScreen = () => {
   if (!isConnected) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.message}>Calendar not connected</Text>
-        <TouchableOpacity 
-          style={styles.connectButton}
-          onPress={handleConnectCalendar}
-        >
-          <Text style={styles.connectButtonText}>Connect Google Calendar</Text>
-        </TouchableOpacity>
+        <Text style={styles.message}>Connect your Google Calendar to get started</Text>
+        <ConnectCalendarButton 
+          onSuccess={() => {
+            setIsConnected(true);
+            loadEvents();
+          }}
+        />
       </View>
     );
   }

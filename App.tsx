@@ -13,6 +13,7 @@ import { useAuthStore } from './src/features/auth/stores/authStore';
 import { useEffect } from 'react';
 import * as Font from 'expo-font';
 import { Feather } from '@expo/vector-icons';
+import { ENV } from './src/config/env';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -31,13 +32,41 @@ export default function App() {
   const setUser = useAuthStore(state => state.setUser);
   const [isInitialized, setIsInitialized] = React.useState(false);
 
-  // Initialize Google Auth
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: Constants.expoConfig?.extra?.googleWebClientId,
-    iosClientId: Constants.expoConfig?.extra?.googleIosClientId,
-    scopes: SCOPES,
-    selectAccount: true,
+  // Initialize Google Auth with more detailed logging
+  const authConfig = Platform.select({
+    ios: {
+      iosClientId: ENV.GOOGLE_IOS_CLIENT_ID,
+      scopes: SCOPES,
+    },
+    default: {
+      clientId: ENV.GOOGLE_WEB_CLIENT_ID,
+      scopes: SCOPES,
+      selectAccount: true,
+    },
   });
+
+  logger.debug('App', 'Auth configuration selected', {
+    platform: Platform.OS,
+    config: {
+      hasIosClientId: !!authConfig?.iosClientId,
+      hasWebClientId: !!authConfig?.clientId,
+      scopes: authConfig?.scopes
+    }
+  });
+
+  const [request, response, promptAsync] = Google.useAuthRequest(authConfig);
+
+  // Log auth hook values
+  React.useEffect(() => {
+    logger.debug('App', 'Auth hook values updated', {
+      hasRequest: !!request,
+      requestType: request ? typeof request : 'undefined',
+      hasResponse: !!response,
+      responseType: response ? response.type : 'undefined',
+      hasPrompt: !!promptAsync,
+      promptType: promptAsync ? typeof promptAsync : 'undefined'
+    });
+  }, [request, response, promptAsync]);
 
   // Set up auth state listener
   React.useEffect(() => {
@@ -59,18 +88,25 @@ export default function App() {
     };
   }, []);
 
-  // Share Google auth with calendar service
+  // Share Google auth with calendar service with additional logging
   React.useEffect(() => {
-    if (request) {
+    if (request && promptAsync) {
+      logger.debug('App', 'Setting Google auth in calendar service', {
+        requestProperties: Object.keys(request),
+        promptAsyncType: typeof promptAsync,
+        responseType: response?.type
+      });
+
       calendarService.setGoogleAuth([request, response, promptAsync]);
+      
       logger.debug('App', 'Google Auth Configuration', {
         platform: Platform.OS,
-        hasWebClientId: !!Constants.expoConfig?.extra?.googleWebClientId,
-        hasIosClientId: !!Constants.expoConfig?.extra?.googleIosClientId,
-        scopes: SCOPES,
+        hasWebClientId: !!ENV.GOOGLE_WEB_CLIENT_ID,
+        hasIosClientId: !!ENV.GOOGLE_IOS_CLIENT_ID,
+        scopes: SCOPES
       });
     }
-  }, [request, response]);
+  }, [request, response, promptAsync]);
 
   useEffect(() => {
     async function loadFonts() {
