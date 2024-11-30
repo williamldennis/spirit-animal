@@ -10,6 +10,9 @@ import { Platform } from 'react-native';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './src/config/firebase';
 import { useAuthStore } from './src/features/auth/stores/authStore';
+import { useEffect } from 'react';
+import * as Font from 'expo-font';
+import { Feather } from '@expo/vector-icons';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -68,6 +71,18 @@ export default function App() {
       });
     }
   }, [request, response]);
+
+  useEffect(() => {
+    async function loadFonts() {
+      try {
+        await Font.loadAsync(Feather.font);
+        logger.debug('App', 'Feather fonts loaded successfully');
+      } catch (error) {
+        logger.error('App', 'Failed to load Feather fonts', { error });
+      }
+    }
+    loadFonts();
+  }, []);
 
   if (!isInitialized) {
     logger.debug('App', 'Still initializing...');

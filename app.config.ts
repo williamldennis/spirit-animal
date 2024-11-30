@@ -4,7 +4,7 @@ dotenv.config();
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const REVERSED_CLIENT_ID = GOOGLE_IOS_CLIENT_ID?.split('.').reverse().join('.');
 
-export default {
+const config = {
   expo: {
     name: 'spirit-animal',
     slug: 'spirit-animal',
@@ -85,4 +85,6 @@ export default {
       disableKeyboardHandling: true
     }
   }
-}; 
+};
+
+module.exports = config; 
