@@ -3,6 +3,16 @@
     "name": "spirit-animal",
     "slug": "spirit-animal",
     "jsEngine": "hermes",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.yourcompany.spiritanimal",
+      "supportsTablet": true,
+      "icon": "./assets/ios-icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    },
     "_internal": {
       "isDebug": false,
       "newArchEnabled": true

@@ -31,4 +31,6 @@ requiredVars.forEach((varName) => {
   }
 });
 
+export const APP_BUNDLE_ID = 'com.yourcompany.yourappname';
+
 export default ENV; 
