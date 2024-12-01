@@ -32,6 +32,12 @@ const REQUIRED_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events'
 ];
 
+interface CalendarCredentials {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+}
+
 class CalendarService {
   private googleAuthRequest: Google.AuthRequest | null = null;
   private googleAuthPrompt: (() => Promise<Google.AuthSessionResult>) | null = null;
@@ -167,9 +173,52 @@ class CalendarService {
       if (!credentials?.accessToken) return false;
 
       const expiresAt = new Date(credentials.expiresAt);
-      return expiresAt > new Date();
+      
+      if (expiresAt <= new Date() && credentials.refreshToken) {
+        return this.refreshAccessToken(userId, credentials.refreshToken);
+      }
+
+      return true;
     } catch (error) {
       logger.error('CalendarService.isCalendarConnected', 'Check failed', { error });
+      return false;
+    }
+  }
+
+  private async refreshAccessToken(userId: string, refreshToken: string): Promise<boolean> {
+    try {
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: ENV.GOOGLE_IOS_CLIENT_ID,
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }).toString()
+      });
+
+      const tokenData = await tokenResponse.json();
+
+      if (!tokenResponse.ok || !tokenData.access_token) {
+        logger.error('CalendarService.refreshAccessToken', 'Refresh failed', {
+          status: tokenResponse.status,
+          error: tokenData
+        });
+        return false;
+      }
+
+      const credentials: CalendarCredentials = {
+        accessToken: tokenData.access_token,
+        refreshToken: refreshToken,
+        expiresAt: new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString(),
+      };
+
+      await this.saveCalendarCredentials(userId, credentials);
+      return true;
+    } catch (error) {
+      logger.error('CalendarService.refreshAccessToken', 'Refresh failed', { error });
       return false;
     }
   }
@@ -179,6 +228,15 @@ class CalendarService {
       const credentials = await this.getCalendarCredentials(userId);
       if (!credentials?.accessToken) {
         throw new Error('Calendar not connected');
+      }
+
+      const expiresAt = new Date(credentials.expiresAt);
+      if (expiresAt <= new Date() && credentials.refreshToken) {
+        const refreshed = await this.refreshAccessToken(userId, credentials.refreshToken);
+        if (!refreshed) {
+          throw new Error('Failed to refresh token');
+        }
+        credentials = await this.getCalendarCredentials(userId);
       }
 
       const now = new Date();
@@ -209,7 +267,7 @@ class CalendarService {
     }
   }
 
-  private async saveCalendarCredentials(userId: string, credentials: any) {
+  private async saveCalendarCredentials(userId: string, credentials: CalendarCredentials) {
     try {
       const userRef = doc(db, 'users', userId);
       await setDoc(userRef, {
@@ -221,7 +279,7 @@ class CalendarService {
     }
   }
 
-  private async getCalendarCredentials(userId: string): Promise<any> {
+  private async getCalendarCredentials(userId: string): Promise<CalendarCredentials | null> {
     try {
       const userRef = doc(db, 'users', userId);
       const userDoc = await getDoc(userRef);
