@@ -214,6 +214,33 @@ class EmailService {
       body
     ].join('\r\n');
   }
+
+  async archiveEmail(userId: string, emailId: string): Promise<boolean> {
+    try {
+      const credentials = await this.getEmailCredentials(userId);
+      if (!credentials?.accessToken) throw new Error('Gmail not connected');
+
+      const response = await fetch(
+        `${this.GMAIL_API_BASE}/messages/${emailId}/modify`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${credentials.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            addLabelIds: ['ARCHIVE'],
+            removeLabelIds: ['INBOX']
+          }),
+        }
+      );
+
+      return response.ok;
+    } catch (error) {
+      logger.error('EmailService.archiveEmail', 'Failed to archive email', { error });
+      throw error;
+    }
+  }
 }
 
 export const emailService = new EmailService(); 

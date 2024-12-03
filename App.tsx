@@ -1,4 +1,6 @@
+import 'react-native-gesture-handler';
 import React from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import * as Google from 'expo-auth-session/providers/google';
@@ -111,7 +113,14 @@ export default function App() {
   useEffect(() => {
     async function loadFonts() {
       try {
-        await Font.loadAsync(Feather.font);
+        if (Platform.OS === 'ios') {
+          await Font.loadAsync({
+            ...Feather.font,
+            'Feather': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf')
+          });
+        } else {
+          await Font.loadAsync(Feather.font);
+        }
         logger.debug('App', 'Feather fonts loaded successfully');
       } catch (error) {
         logger.error('App', 'Failed to load Feather fonts', { error });
@@ -126,8 +135,10 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AppNavigator />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppNavigator />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 } 

@@ -26,10 +26,9 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="com.willdennis.spiritanimal"/>
+        <data android:scheme="com.googleusercontent.apps.1042281418890"/>
         <data android:scheme="com.willdennis.spiritanimal"/>
         <data android:scheme="exp+spirit-animal"/>
-        <data android:scheme="com.googleusercontent.apps.1042281418890-lf5ougfstfge53aausq1kgpkhm7id4m"/>
       </intent-filter>
     </activity>
   </application>

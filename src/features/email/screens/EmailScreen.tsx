@@ -16,6 +16,8 @@ import { Email } from '../types';
 import { format } from 'date-fns';
 import ConnectGmailButton from '../components/ConnectGmailButton';
 import { logger } from '../../../utils/logger';
+import { Swipeable } from 'react-native-gesture-handler';
+import { useTaskStore } from '../../tasks/stores/taskStore';
 
 export default function EmailScreen() {
   const [emails, setEmails] = useState<Email[]>([]);
@@ -75,19 +77,81 @@ export default function EmailScreen() {
     }
   };
 
-  const renderEmailItem = ({ item }: { item: Email }) => (
-    <TouchableOpacity
-      style={styles.emailItem}
-      onPress={() => navigation.navigate('EmailDetail', { emailId: item.id })}
-    >
-      <View style={styles.emailHeader}>
-        <Text style={styles.sender}>{item.from}</Text>
-        <Text style={styles.date}>{format(new Date(item.date), 'MMM d')}</Text>
-      </View>
-      <Text style={styles.subject} numberOfLines={1}>{item.subject}</Text>
-      <Text style={styles.preview} numberOfLines={2}>{item.snippet}</Text>
-    </TouchableOpacity>
-  );
+  const handleArchive = async (emailId: string) => {
+    if (!user?.uid) return;
+    
+    try {
+      const success = await emailService.archiveEmail(user.uid, emailId);
+      if (success) {
+        // The email will be removed from the list automatically via the subscription
+        logger.debug('EmailScreen', 'Email archived successfully', { emailId });
+      }
+    } catch (error) {
+      logger.error('EmailScreen', 'Failed to archive email', { error });
+      Alert.alert('Error', 'Failed to archive email');
+    }
+  };
+
+  const handleCreateTask = async (email: Email) => {
+    if (!user?.uid) return;
+
+    try {
+      await useTaskStore.getState().addTask(user.uid, {
+        title: email.subject,
+        criteria: `Email Reference: ${email.id}\n\nFrom: ${email.from}\nDate: ${format(new Date(email.date), 'PPp')}\n\nTap to open original email.`,
+        completed: false,
+        dueDate: undefined
+      });
+      Alert.alert('Success', 'Task created from email');
+    } catch (error) {
+      logger.error('EmailScreen', 'Failed to create task from email', { error });
+      Alert.alert('Error', 'Failed to create task');
+    }
+  };
+
+  const renderEmailItem = ({ item }: { item: Email }) => {
+    const renderRightActions = () => (
+      <TouchableOpacity
+        style={styles.swipeActionRight}
+        onPress={() => handleArchive(item.id)}
+      >
+        <Feather name="archive" size={24} color="white" />
+        <Text style={styles.swipeActionText}>Archive</Text>
+      </TouchableOpacity>
+    );
+
+    const renderLeftActions = () => (
+      <TouchableOpacity
+        style={styles.swipeActionLeft}
+        onPress={() => handleCreateTask(item)}
+      >
+        <Feather name="check-square" size={24} color="white" />
+        <Text style={styles.swipeActionText}>Create Task</Text>
+      </TouchableOpacity>
+    );
+
+    return (
+      <Swipeable
+        renderRightActions={renderRightActions}
+        renderLeftActions={renderLeftActions}
+        friction={2}
+        rightThreshold={40}
+        leftThreshold={40}
+      >
+        <TouchableOpacity
+          style={styles.emailItem}
+          onPress={() => navigation.navigate('EmailDetail', { emailId: item.id })}
+        >
+          <View style={styles.emailHeader}>
+            <Text style={styles.sender}>{item.from}</Text>
+            <Text style={styles.date}>{format(new Date(item.date), 'MMM d')}</Text>
+          </View>
+          <Text style={styles.subject} numberOfLines={1}>{item.subject}</Text>
+          <Text style={styles.preview} numberOfLines={2}>{item.snippet}</Text>
+        </TouchableOpacity>
+      </Swipeable>
+    );
+  };
 
   if (loading) {
     return (
@@ -204,5 +268,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
+  },
+  swipeActionRight: {
+    backgroundColor: '#4B5563',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 100,
+    height: '100%',
+  },
+  swipeActionLeft: {
+    backgroundColor: '#2563EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 100,
+    height: '100%',
+  },
+  swipeActionText: {
+    color: 'white',
+    fontSize: 14,
+    marginTop: 4,
   },
 }); 

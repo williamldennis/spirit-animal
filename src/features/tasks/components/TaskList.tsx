@@ -269,6 +269,13 @@ export default function TaskList() {
     }
   };
 
+  const handleEmailLink = (emailId: string) => {
+    // Check if the criteria contains an email reference
+    if (emailId) {
+      navigation.navigate('EmailDetail', { emailId });
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -372,7 +379,16 @@ export default function TaskList() {
                 
                 {item.criteria && (
                   <View>
-                    <Text style={styles.taskCriteria} numberOfLines={2}>
+                    <Text 
+                      style={styles.taskCriteria} 
+                      numberOfLines={2}
+                      onPress={() => {
+                        const match = item.criteria?.match(/Email Reference: ([^\n]+)/);
+                        if (match) {
+                          handleEmailLink(match[1]);
+                        }
+                      }}
+                    >
                       {item.criteria}
                     </Text>
                     {item.completed && isSubtask && (
@@ -536,5 +552,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 4,
     fontStyle: 'italic',
+    textDecorationLine: 'underline',
   },
 }); 

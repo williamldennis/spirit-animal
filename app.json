@@ -5,6 +5,7 @@
     "scheme": "com.willdennis.spiritanimal",
     "jsEngine": "hermes",
     "icon": "./assets/icon.png",
+    "version": "1.0.0",
     "ios": {
       "bundleIdentifier": "com.willdennis.spiritanimal",
       "supportsTablet": true,
@@ -12,11 +13,24 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "minimumOSVersion": "16.0"
     },
     "_internal": {
       "isDebug": false,
       "newArchEnabled": true
-    }
+    },
+    "plugins": [
+      [
+        "react-native-gesture-handler",
+        {
+          "enabled": true
+        }
+      ]
+    ],
+    "assetBundlePatterns": [
+      "**/*",
+      "node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf"
+    ]
   }
 }
