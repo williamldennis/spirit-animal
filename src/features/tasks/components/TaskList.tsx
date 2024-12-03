@@ -21,6 +21,8 @@ import { aiService } from '../../ai/services/aiService';
 import { useAIStore } from '../../ai/stores/aiStore';
 import { useBottomSheet } from '../../shared/hooks/useBottomSheet';
 import { AIBottomSheet } from '../../ai/components/AIBottomSheet';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 type TaskSection = {
   title: string;
@@ -39,6 +41,7 @@ export default function TaskList() {
   const isAIBottomSheetVisible = useBottomSheet((state) => state.isAIBottomSheetVisible);
   const hideAIBottomSheet = useBottomSheet((state) => state.hideAIBottomSheet);
   const [viewingTaskId, setViewingTaskId] = useState<string | null>(null);
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
 
   const formatDueDate = (dueDate: string | Date | Timestamp | undefined) => {
     if (!dueDate) return '';
@@ -270,7 +273,6 @@ export default function TaskList() {
   };
 
   const handleEmailLink = (emailId: string) => {
-    // Check if the criteria contains an email reference
     if (emailId) {
       navigation.navigate('EmailDetail', { emailId });
     }
