@@ -18,6 +18,7 @@ import ConnectGmailButton from '../components/ConnectGmailButton';
 import { logger } from '../../../utils/logger';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useTaskStore } from '../../tasks/stores/taskStore';
+import Toast from 'react-native-toast-message';
 
 export default function EmailScreen() {
   const [emails, setEmails] = useState<Email[]>([]);
@@ -83,12 +84,35 @@ export default function EmailScreen() {
     try {
       const success = await emailService.archiveEmail(user.uid, emailId);
       if (success) {
-        // The email will be removed from the list automatically via the subscription
+        // Remove the email from the local state
+        setEmails(prevEmails => prevEmails.filter(email => email.id !== emailId));
+        
+        // Show success toast
+        Toast.show({
+          type: 'success',
+          text1: 'Email Archived',
+          text2: 'The email has been moved to archive',
+          position: 'bottom',
+          visibilityTime: 2000,
+        });
+        
         logger.debug('EmailScreen', 'Email archived successfully', { emailId });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Archive Failed',
+          text2: 'Unable to archive email',
+          position: 'bottom',
+        });
       }
     } catch (error) {
       logger.error('EmailScreen', 'Failed to archive email', { error });
-      Alert.alert('Error', 'Failed to archive email');
+      Toast.show({
+        type: 'error',
+        text1: 'Archive Failed',
+        text2: 'Unable to archive email',
+        position: 'bottom',
+      });
     }
   };
 

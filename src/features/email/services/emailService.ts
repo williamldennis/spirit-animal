@@ -229,13 +229,21 @@ class EmailService {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            addLabelIds: ['ARCHIVE'],
-            removeLabelIds: ['INBOX']
+            removeLabelIds: ['INBOX'],
           }),
         }
       );
 
-      return response.ok;
+      if (!response.ok) {
+        logger.error('EmailService.archiveEmail', 'Archive request failed', { 
+          status: response.status,
+          emailId 
+        });
+        return false;
+      }
+
+      logger.debug('EmailService.archiveEmail', 'Email archived successfully', { emailId });
+      return true;
     } catch (error) {
       logger.error('EmailService.archiveEmail', 'Failed to archive email', { error });
       throw error;
