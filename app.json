@@ -6,6 +6,9 @@
     "jsEngine": "hermes",
     "icon": "./assets/icon.png",
     "version": "1.0.0",
+    "developmentClient": {
+      "silentLaunch": true
+    },
     "ios": {
       "bundleIdentifier": "com.willdennis.spiritanimal",
       "supportsTablet": true,
