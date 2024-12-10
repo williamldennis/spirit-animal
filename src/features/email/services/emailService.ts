@@ -6,6 +6,7 @@ import { ENV } from '../../../config/env';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -16,6 +17,8 @@ class EmailService {
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.modify'
   ];
+  private readonly CACHE_KEY_EMAILS = 'cached_emails_';
+  private readonly CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
   async connectGmail(userId: string, accessToken: string): Promise<boolean> {
     try {
@@ -49,35 +52,98 @@ class EmailService {
     }
   }
 
-  async fetchEmails(userId: string): Promise<Email[]> {
+  async fetchEmails(userId: string, forceRefresh = false): Promise<Email[]> {
     try {
-      const credentials = await this.getEmailCredentials(userId);
-      if (!credentials?.accessToken) throw new Error('Gmail not connected');
-
-      const response = await fetch(
-        `${this.GMAIL_API_BASE}/messages?maxResults=20&labelIds=INBOX`,
-        {
-          headers: {
-            Authorization: `Bearer ${credentials.accessToken}`,
-          },
+      // Try to get cached emails first if not forcing refresh
+      if (!forceRefresh) {
+        const cachedEmails = await this.getCachedEmails(userId);
+        if (cachedEmails) {
+          // Trigger background refresh if cache is older than CACHE_EXPIRY
+          const cacheAge = Date.now() - cachedEmails.timestamp;
+          if (cacheAge > this.CACHE_EXPIRY) {
+            this.fetchAndCacheEmails(userId).catch(error => 
+              logger.error('EmailService.fetchEmails', 'Background refresh failed', { error })
+            );
+          }
+          return cachedEmails.emails;
         }
-      );
-
-      if (!response.ok) throw new Error('Failed to fetch emails');
-
-      const data = await response.json();
-      const emails: Email[] = [];
-
-      // Fetch full details for each email
-      for (const message of data.messages) {
-        const emailData = await this.fetchEmailDetails(userId, message.id);
-        if (emailData) emails.push(emailData);
       }
 
-      return emails;
+      return await this.fetchAndCacheEmails(userId);
     } catch (error) {
       logger.error('EmailService.fetchEmails', 'Fetch failed', { error });
+      // If fetch fails, try to return cached data as fallback
+      const cachedEmails = await this.getCachedEmails(userId);
+      if (cachedEmails) {
+        return cachedEmails.emails;
+      }
       throw error;
+    }
+  }
+
+  private async fetchAndCacheEmails(userId: string): Promise<Email[]> {
+    const credentials = await this.getEmailCredentials(userId);
+    if (!credentials?.accessToken) throw new Error('Gmail not connected');
+
+    const response = await fetch(
+      `${this.GMAIL_API_BASE}/messages?maxResults=20&labelIds=INBOX`,
+      {
+        headers: {
+          Authorization: `Bearer ${credentials.accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) throw new Error('Failed to fetch emails');
+
+    const data = await response.json();
+    const emails: Email[] = [];
+
+    // Fetch full details for each email
+    for (const message of data.messages) {
+      const emailData = await this.fetchEmailDetails(userId, message.id);
+      if (emailData) emails.push(emailData);
+    }
+
+    // Cache the fetched emails
+    await this.cacheEmails(userId, emails);
+    return emails;
+  }
+
+  private async cacheEmails(userId: string, emails: Email[]) {
+    try {
+      const cacheData = {
+        emails,
+        timestamp: Date.now(),
+      };
+      await AsyncStorage.setItem(
+        this.CACHE_KEY_EMAILS + userId,
+        JSON.stringify(cacheData)
+      );
+    } catch (error) {
+      logger.error('EmailService.cacheEmails', 'Failed to cache emails', { error });
+    }
+  }
+
+  private async getCachedEmails(userId: string): Promise<{ emails: Email[], timestamp: number } | null> {
+    try {
+      const cached = await AsyncStorage.getItem(this.CACHE_KEY_EMAILS + userId);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+      return null;
+    } catch (error) {
+      logger.error('EmailService.getCachedEmails', 'Failed to get cached emails', { error });
+      return null;
+    }
+  }
+
+  // Add method to clear cache
+  async clearEmailCache(userId: string) {
+    try {
+      await AsyncStorage.removeItem(this.CACHE_KEY_EMAILS + userId);
+    } catch (error) {
+      logger.error('EmailService.clearEmailCache', 'Failed to clear email cache', { error });
     }
   }
 

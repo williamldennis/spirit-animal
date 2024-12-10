@@ -9,7 +9,7 @@ import {
   Alert
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { emailService } from '../services/emailService';
 import { useAuthStore } from '../../auth/stores/authStore';
 import { Email } from '../types';
@@ -23,13 +23,16 @@ import Toast from 'react-native-toast-message';
 export default function EmailScreen() {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const navigation = useNavigation();
   const user = useAuthStore(state => state.user);
 
-  useEffect(() => {
-    checkConnection();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      checkConnection();
+    }, [])
+  );
 
   const checkConnection = async () => {
     if (!user?.uid) return;
@@ -49,17 +52,26 @@ export default function EmailScreen() {
     }
   };
 
-  const loadEmails = async () => {
+  const loadEmails = async (forceRefresh = false) => {
     if (!user?.uid) return;
     
     try {
-      const fetchedEmails = await emailService.fetchEmails(user.uid);
+      if (!forceRefresh) {
+        setLoading(true);
+      }
+      const fetchedEmails = await emailService.fetchEmails(user.uid, forceRefresh);
       setEmails(fetchedEmails);
     } catch (error) {
       Alert.alert('Error', 'Failed to load emails');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadEmails(true);
   };
 
   const handleConnectGmail = async () => {
@@ -205,8 +217,8 @@ export default function EmailScreen() {
         data={emails}
         renderItem={renderEmailItem}
         keyExtractor={item => item.id}
-        refreshing={loading}
-        onRefresh={loadEmails}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
       />
       <TouchableOpacity
         style={styles.fab}
