@@ -7,6 +7,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { decode } from 'html-entities';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -173,7 +174,7 @@ class EmailService {
       const date = headers.find((h: any) => h.name === 'Date')?.value || '';
       
       // Get email body
-      const body = this.getEmailBody(data.payload);
+      const { html, text } = this.getEmailBody(data.payload);
 
       return {
         id: data.id,
@@ -181,7 +182,8 @@ class EmailService {
         from,
         to,
         subject,
-        body,
+        body: text,
+        bodyHtml: html,
         snippet: data.snippet,
         date,
         isRead: !data.labelIds.includes('UNREAD'),
@@ -193,21 +195,43 @@ class EmailService {
     }
   }
 
-  private getEmailBody(payload: any): string {
-    if (payload.body?.data) {
-      return this.decodeBase64Url(payload.body.data);
-    }
+  private getEmailBody(payload: any): { html: string | null; text: string } {
+    let htmlContent: string | null = null;
+    let textContent = '';
 
-    if (payload.parts) {
-      const textPart = payload.parts.find((part: any) => 
-        part.mimeType === 'text/plain' || part.mimeType === 'text/html'
-      );
-      if (textPart?.body?.data) {
-        return this.decodeBase64Url(textPart.body.data);
+    const findContent = (part: any): void => {
+      if (part.body?.data) {
+        const content = this.decodeBase64Url(part.body.data);
+        if (part.mimeType === 'text/html') {
+          htmlContent = content;
+        } else if (part.mimeType === 'text/plain') {
+          textContent = content;
+        }
       }
+
+      if (part.parts) {
+        part.parts.forEach(findContent);
+      }
+    };
+
+    findContent(payload);
+
+    // Clean up HTML content
+    if (htmlContent) {
+      htmlContent = decode(htmlContent);
     }
 
-    return '';
+    // If no text content but have HTML, create a basic text version
+    if (!textContent && htmlContent) {
+      textContent = htmlContent.replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    return {
+      html: htmlContent,
+      text: textContent
+    };
   }
 
   private decodeBase64Url(base64Url: string): string {
@@ -244,7 +268,10 @@ class EmailService {
       if (!credentials?.accessToken) throw new Error('Gmail not connected');
 
       const mimeContent = this.createMimeMessage(params);
-      const base64EncodedEmail = btoa(mimeContent).replace(/\+/g, '-').replace(/\//g, '_');
+      const base64EncodedEmail = btoa(mimeContent)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
 
       const response = await fetch(
         `${this.GMAIL_API_BASE}/messages/send`,
@@ -268,11 +295,12 @@ class EmailService {
   }
 
   private createMimeMessage(params: SendEmailParams): string {
-    const { to, subject, body } = params;
+    const { to, subject, body, isHtml } = params;
     const toHeader = to.join(', ');
+    const contentType = isHtml ? 'text/html' : 'text/plain';
     
     return [
-      'Content-Type: text/plain; charset="UTF-8"',
+      `Content-Type: ${contentType}; charset="UTF-8"`,
       'MIME-Version: 1.0',
       `To: ${toHeader}`,
       `Subject: ${subject}`,

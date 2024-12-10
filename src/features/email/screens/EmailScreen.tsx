@@ -79,11 +79,8 @@ export default function EmailScreen() {
     
     try {
       setLoading(true);
-      const success = await emailService.connectGmail(user.uid);
-      if (success) {
-        setIsConnected(true);
-        loadEmails();
-      }
+      setIsConnected(true);
+      loadEmails();
     } catch (error) {
       Alert.alert('Error', 'Failed to connect Gmail');
       setLoading(false);

@@ -33,6 +33,7 @@ const SCOPES = [
 export default function App() {
   const setUser = useAuthStore(state => state.setUser);
   const [isInitialized, setIsInitialized] = React.useState(false);
+  const [fontsLoaded, setFontsLoaded] = React.useState(false);
 
   // Initialize Google Auth with more detailed logging
   const authConfig = Platform.select({
@@ -110,27 +111,26 @@ export default function App() {
     }
   }, [request, response, promptAsync]);
 
+  // Load fonts
   useEffect(() => {
     async function loadFonts() {
       try {
-        if (Platform.OS === 'ios') {
-          await Font.loadAsync({
-            ...Feather.font,
-            'Feather': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf')
-          });
-        } else {
-          await Font.loadAsync(Feather.font);
-        }
+        await Font.loadAsync({
+          'Feather': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf')
+        });
+        setFontsLoaded(true);
         logger.debug('App', 'Feather fonts loaded successfully');
       } catch (error) {
         logger.error('App', 'Failed to load Feather fonts', { error });
+        // Continue even if font loading fails
+        setFontsLoaded(true);
       }
     }
     loadFonts();
   }, []);
 
-  if (!isInitialized) {
-    logger.debug('App', 'Still initializing...');
+  if (!isInitialized || !fontsLoaded) {
+    logger.debug('App', 'Still initializing...', { isInitialized, fontsLoaded });
     return null;
   }
 

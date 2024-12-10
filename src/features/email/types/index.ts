@@ -4,6 +4,7 @@ export interface Email {
   to: string[];
   subject: string;
   body: string;
+  bodyHtml: string | null;
   snippet: string;
   date: string;
   isRead: boolean;
@@ -31,5 +32,6 @@ export interface SendEmailParams {
   to: string[];
   subject: string;
   body: string;
+  isHtml?: boolean;
   attachments?: File[];
 } 

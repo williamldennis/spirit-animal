@@ -17,6 +17,7 @@ import { Email } from '../types';
 import { Feather } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { logger } from '../../../utils/logger';
+import EmailContent from '../components/EmailContent';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EmailDetail'>;
 
@@ -103,7 +104,7 @@ export default function EmailDetailScreen() {
             To: {email.to.join(', ')}
           </Text>
         )}
-        <Text style={styles.body}>{email.body}</Text>
+        <EmailContent html={email.bodyHtml} text={email.body} />
       </ScrollView>
     </View>
   );
