@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { authService } from '../services/authService';
 import type { User } from 'firebase/auth';
+import { logger } from '../utils/logger';
 
 interface AuthState {
   user: User | null;
@@ -29,9 +30,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   signIn: async (email: string, password: string) => {
     set({ loading: true, error: null });
     try {
-      const user = await authService.signIn(email, password);
-      set({ user, loading: false });
-    } catch (error: any) {
+      const userCredential = await authService.signIn(email, password);
+      logger.debug('AuthStore', 'Sign in successful', {
+        userId: userCredential.user.uid
+      });
+      set({ user: userCredential.user, loading: false });
+    } catch (error) {
+      logger.error('AuthStore', 'Sign in failed', { error });
       set({ error: error.message, loading: false });
     }
   },

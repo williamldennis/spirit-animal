@@ -36,4 +36,20 @@ logger.debug('Firebase', 'Initialization complete', {
   hasDb: !!db,
 });
 
+// Add debug logging for initialization
+logger.debug('Firebase', 'Config values', {
+  hasApiKey: !!FIREBASE_CONFIG.apiKey,
+  hasAuthDomain: !!FIREBASE_CONFIG.authDomain,
+  hasProjectId: !!FIREBASE_CONFIG.projectId,
+  env: process.env.NODE_ENV
+});
+
+// After auth initialization, add:
+auth.onAuthStateChanged((user) => {
+  logger.debug('Firebase', 'Auth state changed', {
+    isSignedIn: !!user,
+    userId: user?.uid
+  });
+});
+
 export { auth, db }; 
