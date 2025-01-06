@@ -1,60 +1,32 @@
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-interface LoggerOptions {
-  timestamp?: boolean;
-  level?: LogLevel;
-}
-
 class Logger {
-  private readonly options: LoggerOptions;
-
-  constructor(options: LoggerOptions = {}) {
-    this.options = {
-      timestamp: true,
-      level: 'debug',
-      ...options,
-    };
+  debug(tag: string, message: string, data?: any) {
+    this.log('debug', tag, message, data);
   }
 
-  private formatMessage(level: LogLevel, context: string, message: string, data?: any): string {
-    const timestamp = this.options.timestamp ? new Date().toISOString() : '';
-    const dataString = data ? ` ${JSON.stringify(data)}` : '';
-    return `[${timestamp}] [${level.toUpperCase()}] [${context}] ${message}${dataString}`;
+  info(tag: string, message: string, data?: any) {
+    this.log('info', tag, message, data);
   }
 
-  debug(context: string, message: string, data?: any) {
-    if (this.shouldLog('debug')) {
-      console.debug(this.formatMessage('debug', context, message, data));
+  warn(tag: string, message: string, data?: any) {
+    this.log('warn', tag, message, data);
+  }
+
+  error(tag: string, message: string, data?: any) {
+    this.log('error', tag, message, data);
+  }
+
+  private log(level: LogLevel, tag: string, message: string, data?: any) {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [${level.toUpperCase()}] [${tag}] ${message}`;
+    
+    if (data) {
+      console.log(logMessage, data);
+    } else {
+      console.log(logMessage);
     }
-  }
-
-  info(context: string, message: string, data?: any) {
-    if (this.shouldLog('info')) {
-      console.info(this.formatMessage('info', context, message, data));
-    }
-  }
-
-  warn(context: string, message: string, data?: any) {
-    if (this.shouldLog('warn')) {
-      console.warn(this.formatMessage('warn', context, message, data));
-    }
-  }
-
-  error(context: string, message: string, data?: any) {
-    if (this.shouldLog('error')) {
-      console.error(this.formatMessage('error', context, message, data));
-    }
-  }
-
-  private shouldLog(level: LogLevel): boolean {
-    const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
-    const currentLevelIndex = levels.indexOf(this.options.level || 'debug');
-    const messageLevelIndex = levels.indexOf(level);
-    return messageLevelIndex >= currentLevelIndex;
   }
 }
 
-export const logger = new Logger({
-  timestamp: true,
-  level: __DEV__ ? 'debug' : 'info'
-}); 
+export const logger = new Logger(); 

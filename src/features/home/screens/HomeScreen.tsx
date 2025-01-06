@@ -11,6 +11,7 @@ import AddTaskModal from '../../tasks/components/AddTaskModal';
 import { AIBottomSheet } from '../../ai/components/AIBottomSheet';
 import AddEventModal from '../../calendar/components/AddEventModal';
 import EmailScreen from '../../email/screens/EmailScreen';
+import { useBottomSheet } from '../../shared/hooks/useBottomSheet';
 
 type TabType = {
   id: string;
@@ -177,14 +178,17 @@ export default function HomeScreen() {
       {/* AI FAB */}
       <TouchableOpacity 
         style={styles.fab}
-        onPress={() => setShowAI(true)}
+        onPress={() => {
+          logger.debug('HomeScreen', 'Opening AI Assistant');
+          setShowAI(true);
+        }}
       >
         <Text style={styles.fabText}>🦊</Text>
       </TouchableOpacity>
 
       {/* AI Bottom Sheet */}
       <AIBottomSheet 
-        visible={showAI} 
+        visible={showAI}
         onClose={() => setShowAI(false)} 
       />
 

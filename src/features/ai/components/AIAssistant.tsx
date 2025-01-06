@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeTextInput } from '../../../shared/components/SafeTextInput';
 import { Feather } from '@expo/vector-icons';
 import { AIMessage } from '../types';
+import { logger } from '../../../utils/logger';
 
 export const AIAssistant = () => {
   const [input, setInput] = useState('');
@@ -22,51 +23,32 @@ export const AIAssistant = () => {
   const { processUserInput, isProcessing, error } = useAI();
   const insets = useSafeAreaInsets();
 
-  const handleSend = async () => {
+  const handleSubmit = async () => {
     if (!input.trim() || isProcessing) return;
 
-    const userMessage = input;
-    setInput('');
-    
-    const newUserMessage: AIMessage = {
-      role: 'user',
-      content: userMessage,
-      timestamp: new Date()
-    };
-    
-    setConversation(prev => [...prev, newUserMessage]);
-
     try {
-      const aiConversation = conversation.filter(msg => 
-        msg.role === 'user' || msg.role === 'assistant'
-      );
-      
-      const response = await processUserInput(userMessage, aiConversation);
-      
-      const newAIMessage: AIMessage = {
-        role: 'assistant',
-        content: response.text || '',
-        timestamp: new Date()
-      };
-      
-      setConversation(prev => [...prev, newAIMessage]);
+      logger.debug('AIAssistant', 'Processing input', { input });
+      const newMessage = { role: 'user', content: input, timestamp: new Date() };
+      setConversation(prev => [...prev, newMessage]);
+      setInput('');
 
-      if (response.confirmation) {
-        const confirmationMessage: AIMessage = {
-          role: 'confirmation',
-          content: response.confirmation,
-          timestamp: new Date()
+      const response = await processUserInput(input, conversation);
+      if (response) {
+        const aiMessage = { 
+          role: 'assistant', 
+          content: response.text, 
+          timestamp: new Date() 
         };
-        setConversation(prev => [...prev, confirmationMessage]);
+        setConversation(prev => [...prev, aiMessage]);
       }
-    } catch (err) {
-      console.error('Error processing message:', err);
-      const errorMessage: AIMessage = {
+    } catch (error) {
+      logger.error('AIAssistant', 'Failed to process message', { error });
+      // Show error in conversation
+      setConversation(prev => [...prev, {
         role: 'system',
-        content: err instanceof Error ? err.message : 'An error occurred',
+        content: 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date()
-      };
-      setConversation(prev => [...prev, errorMessage]);
+      }]);
     }
   };
 
@@ -118,10 +100,10 @@ export const AIAssistant = () => {
           autoCapitalize="none"
           returnKeyType="send"
           enablesReturnKeyAutomatically
-          onSubmitEditing={handleSend}
+          onSubmitEditing={handleSubmit}
         />
         <TouchableOpacity
-          onPress={handleSend}
+          onPress={handleSubmit}
           disabled={isProcessing || !input.trim()}
           style={styles.sendButton}
         >

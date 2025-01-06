@@ -6,6 +6,7 @@ import { useAIStore } from '../stores/aiStore';
 import { taskService } from '../../tasks/services/taskService';
 import { aiService } from '../services/aiService';
 import { AIMessage } from '../types';
+import { logger } from '../../../utils/logger';
 
 type Props = {
   visible: boolean;
@@ -20,6 +21,8 @@ export const AIBottomSheet = ({ visible, onClose, taskId }: Props) => {
   const { response, clearAIResponse, getTaskResponses, setAIResponse } = useAIStore();
   const taskConversation = taskId ? getTaskResponses(taskId) : null;
   const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const initializeConversation = async () => {
@@ -117,64 +120,27 @@ export const AIBottomSheet = ({ visible, onClose, taskId }: Props) => {
 
   const handleSendMessage = async () => {
     if (!message.trim()) return;
-
-    // Create user message
-    const userMessage: AIMessage = {
-      role: 'user',
-      content: message,
-      timestamp: new Date()
-    };
-
-    // Add user message to conversation
-    setConversation(prev => [...prev, userMessage]);
+    
+    setLoading(true);
+    setError(null);
     
     try {
-      if (taskId) {
-        const task = await taskService.getTask(taskId);
-        if (!task) return;
-
-        const aiResponse = await aiService.processMessage(
-          message,
-          conversation.map(msg => ({
-            role: msg.role === 'user' || msg.role === 'assistant' ? msg.role : 'assistant',
-            content: msg.content
-          }))
-        );
-
-        // Create AI response message
-        const aiMessage: AIMessage = {
-          role: 'assistant',
-          content: aiResponse.text,
-          timestamp: new Date()
-        };
-
-        // Add AI response to conversation
-        setConversation(prev => [...prev, aiMessage]);
-
-        // If there's a confirmation, add it as a separate message
-        if (aiResponse.confirmation) {
-          const confirmationMessage: AIMessage = {
-            role: 'confirmation',
-            content: aiResponse.confirmation,
-            timestamp: new Date()
-          };
-          setConversation(prev => [...prev, confirmationMessage]);
-        }
-
-        setAIResponse(aiResponse, taskId, taskConversation?.parentTaskTitle || 'Task Results');
+      logger.debug('AIBottomSheet', 'Sending message to AI', { message });
+      const response = await aiService.processMessage(message, conversation);
+      
+      if (response) {
+        setConversation(prev => [...prev, 
+          { role: 'user', content: message, timestamp: new Date() },
+          { role: 'assistant', content: response.text, timestamp: new Date() }
+        ]);
       }
+      setMessage('');
     } catch (error) {
-      console.error('Failed to process message:', error);
-      // Add error message to conversation
-      const errorMessage: AIMessage = {
-        role: 'system',
-        content: error instanceof Error ? error.message : 'An error occurred',
-        timestamp: new Date()
-      };
-      setConversation(prev => [...prev, errorMessage]);
+      logger.error('AIBottomSheet', 'Failed to process message', { error });
+      setError('Failed to get response from AI');
+    } finally {
+      setLoading(false);
     }
-
-    setMessage('');
   };
 
   const handleLinkPress = async (url: string) => {
@@ -313,23 +279,21 @@ export const AIBottomSheet = ({ visible, onClose, taskId }: Props) => {
 
           <View style={styles.inputContainer}>
             <TextInput
-              style={styles.input}
               value={message}
               onChangeText={setMessage}
-              placeholder="Ask me anything..."
+              placeholder="Type a message..."
+              style={styles.input}
               multiline
+              maxLength={1000}
               returnKeyType="send"
               onSubmitEditing={handleSendMessage}
             />
-            <TouchableOpacity 
-              style={[
-                styles.sendButton,
-                !message.trim() && styles.sendButtonDisabled
-              ]}
+            <TouchableOpacity
               onPress={handleSendMessage}
-              disabled={!message.trim()}
+              disabled={loading || !message.trim()}
+              style={styles.sendButton}
             >
-              <Text style={styles.sendButtonText}>💬</Text>
+              <Text style={styles.sendButtonText}>Send</Text>
             </TouchableOpacity>
           </View>
         </View>

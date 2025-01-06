@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { authService } from '../services/authService';
 import type { User } from 'firebase/auth';
-import { logger } from '../utils/logger';
+import { logger } from '../../../utils/logger';
 
 interface AuthState {
   user: User | null;

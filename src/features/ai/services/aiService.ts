@@ -45,9 +45,9 @@ export class AIService {
     context: MessageContext[] = []
   ): Promise<AIResponse> {
     try {
-      logger.info('AIService.processMessage', 'Processing message with context', {
-        messageLength: message.length,
-        contextMessages: context.length
+      logger.debug('AIService', 'Processing message', { 
+        input: message, 
+        contextLength: context.length 
       });
 
       const response = await this.makeAPIRequest([
@@ -57,7 +57,7 @@ export class AIService {
 
       return response;
     } catch (error) {
-      logger.error('AIService.processMessage', 'Failed to process message', { error });
+      logger.error('AIService', 'Failed to process message', { error });
       throw error;
     }
   }
@@ -728,65 +728,35 @@ Title: ${action.parameters.title}`;
     }
   }
 
-  private async handleEventCreation(userId: string, parameters: any): Promise<void> {
+  private async handleEventCreation(userId: string, parameters: any): Promise<AIResponse> {
     try {
-      logger.debug('AIService.handleEventCreation', 'Creating event with parameters', {
-        parameters
-      });
-
-      if (!parameters.summary || !parameters.start || !parameters.end) {
-        throw new Error('Missing required event parameters');
-      }
-
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      let startDate = new Date(parameters.start.dateTime);
-      let endDate = new Date(parameters.end.dateTime);
-
-      // If the date is in the past, assume it means next occurrence
-      const now = new Date();
-      if (startDate < now) {
-        // If message mentions tomorrow, use tomorrow's date
-        if (this.messageContainsTomorrow) {
-          const tomorrow = startOfTomorrow();
-          startDate = new Date(
-            tomorrow.getFullYear(),
-            tomorrow.getMonth(),
-            tomorrow.getDate(),
-            startDate.getHours(),
-            startDate.getMinutes()
-          );
-          
-          // Adjust end time to maintain duration
-          const duration = endDate.getTime() - new Date(parameters.start.dateTime).getTime();
-          endDate = new Date(startDate.getTime() + duration);
-        }
-      }
-
-      const eventData = {
-        summary: parameters.summary,
-        description: parameters.description || '',
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: timezone
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: timezone
-        },
-        attendees: parameters.attendees
-      };
-
+      logger.debug('AIService.handleEventCreation', 'Creating event with parameters', { parameters });
+      
+      const { summary, start, end, description, attendees } = parameters;
+      
+      // Adjust the dates to proper timezone
+      const adjustedStart = new Date(start.dateTime);
+      const adjustedEnd = new Date(end.dateTime);
+      
       logger.debug('AIService.handleEventCreation', 'Adjusted event data', {
-        originalStart: parameters.start.dateTime,
-        originalEnd: parameters.end.dateTime,
-        adjustedStart: eventData.start.dateTime,
-        adjustedEnd: eventData.end.dateTime
+        adjustedStart,
+        adjustedEnd,
+        originalStart: start.dateTime,
+        originalEnd: end.dateTime
       });
 
-      await calendarService.createEvent(userId, eventData);
-      logger.debug('AIService.handleEventCreation', 'Event created successfully', {
-        eventData
+      const event = await calendarService.createEvent(userId, {
+        title: summary,
+        start: adjustedStart,
+        end: adjustedEnd,
+        description,
+        attendees
       });
+
+      return {
+        text: `I've created an event "${summary}" for ${adjustedStart.toLocaleString()} to ${adjustedEnd.toLocaleString()}.`,
+        event
+      };
     } catch (error) {
       logger.error('AIService.handleEventCreation', 'Failed to create event', { error });
       throw new Error('Failed to create event');

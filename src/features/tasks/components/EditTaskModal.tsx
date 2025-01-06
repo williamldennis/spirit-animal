@@ -16,6 +16,7 @@ import { taskService } from '../services/taskService';
 import { Task } from '../types';
 import { logger } from '../../../utils/logger';
 import { SafeTextInput } from '../../../shared/components/SafeTextInput';
+import { Timestamp } from 'firebase/firestore';
 
 type Props = {
   visible: boolean;
@@ -26,32 +27,46 @@ type Props = {
 export default function EditTaskModal({ visible, onClose, task }: Props) {
   const [title, setTitle] = useState(task.title);
   const [criteria, setCriteria] = useState(task.criteria || '');
-  const [dueDate, setDueDate] = useState(task.dueDate || new Date());
+  const [dueDate, setDueDate] = useState<Date | null>(task.dueDate ? new Date(task.dueDate.seconds * 1000) : null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setTitle(task.title);
     setCriteria(task.criteria || '');
-    setDueDate(task.dueDate || new Date());
+    setDueDate(task.dueDate ? new Date(task.dueDate.seconds * 1000) : null);
   }, [task]);
+
+  const formatDueDate = (date: Date | null) => {
+    if (!date) return 'No due date';
+    return date.toLocaleDateString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) return;
 
     setLoading(true);
     try {
-      await taskService.updateTask(task.id, {
+      const updates: Partial<Task> = {
         title: title.trim(),
         criteria: criteria.trim(),
-        dueDate: showDatePicker ? dueDate : undefined,
-      });
+        updatedAt: new Date()
+      };
+      
+      if (dueDate) {
+        updates.dueDate = Timestamp.fromDate(dueDate);
+      }
 
-      logger.info('EditTaskModal', 'Task updated successfully');
+      await taskService.updateTask(task.id, updates);
       onClose();
     } catch (error) {
       logger.error('EditTaskModal', 'Failed to update task', { error });
-      Alert.alert('Error', 'Failed to update task. Please try again.');
+      Alert.alert('Error', 'Failed to update task');
     } finally {
       setLoading(false);
     }
@@ -98,7 +113,7 @@ export default function EditTaskModal({ visible, onClose, task }: Props) {
               >
                 <Feather name="calendar" size={20} color="#6B7280" />
                 <Text style={styles.dateButtonText}>
-                  Due: {dueDate.toLocaleDateString()}
+                  {formatDueDate(dueDate)}
                 </Text>
               </TouchableOpacity>
 

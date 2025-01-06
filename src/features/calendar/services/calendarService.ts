@@ -1,9 +1,10 @@
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { logger } from '../../../utils/logger';
 import { ENV } from '../../../config/env';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import type { CalendarEvent, CalendarCredentials } from '../types';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -286,6 +287,83 @@ class CalendarService {
       return userDoc.data()?.calendarCredentials || null;
     } catch (error) {
       logger.error('CalendarService.getCalendarCredentials', 'Fetch failed', { error });
+      throw error;
+    }
+  }
+
+  async createEvent(userId: string, eventData: Partial<CalendarEvent>): Promise<CalendarEvent> {
+    try {
+      logger.debug('CalendarService.createEvent', 'Creating event', { eventData });
+      
+      // First, create in Google Calendar if connected
+      const credentials = await this.getCalendarCredentials(userId);
+      if (credentials?.accessToken) {
+        try {
+          const googleEvent = {
+            summary: eventData.title,
+            description: eventData.description,
+            start: {
+              dateTime: eventData.start?.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+              dateTime: eventData.end?.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            attendees: eventData.attendees?.map(email => ({ email }))
+          };
+
+          const response = await fetch(
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${credentials.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(googleEvent)
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error('Failed to create Google Calendar event');
+          }
+
+          const googleEventData = await response.json();
+          logger.debug('CalendarService.createEvent', 'Created Google Calendar event', { googleEventData });
+        } catch (error) {
+          logger.error('CalendarService.createEvent', 'Failed to create Google Calendar event', { error });
+          // Continue with Firestore creation even if Google Calendar fails
+        }
+      }
+
+      // Then create in Firestore
+      const eventsRef = collection(db, 'events');
+      const newEvent = {
+        userId,
+        title: eventData.title || '',
+        start: eventData.start,
+        end: eventData.end,
+        description: eventData.description || '',
+        location: eventData.location || '',
+        attendees: eventData.attendees || [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        status: 'confirmed'
+      };
+
+      const docRef = await addDoc(eventsRef, newEvent);
+      
+      logger.debug('CalendarService.createEvent', 'Created Firestore event', { 
+        eventId: docRef.id 
+      });
+
+      return {
+        id: docRef.id,
+        ...newEvent
+      };
+    } catch (error) {
+      logger.error('CalendarService.createEvent', 'Failed to create event', { error });
       throw error;
     }
   }
